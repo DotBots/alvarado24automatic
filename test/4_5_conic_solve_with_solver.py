@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 import math
 
+import sympy as sp
+
 ####################### OPTIONS ############################
 # Circle of radius 2 centered at (2,2)
 # x^2 + y^2 - 4x - 4y + 4
@@ -13,9 +15,9 @@ A = np.array([  [ 1,   0,  -2],
 
 # Ellipses of radius 2 and 1 (mayor axis == x-axis) centered at (4,2)
 # x^2 + 4y^2 - 12x - 16y + 48
-# B = np.array([  [ 1/4,   0,  -1],
-#                 [ 0,   1,  -2],
-#                 [-1,  -2,  7]])
+B = np.array([  [ 1/4,   0,  -1],
+                [ 0,   1,  -2],
+                [-1,  -2,  7]])
 
 # Ellipses of width 5 and height 2 (mayor axis == x-axis) centered at (6,2)
 # 0.16x^2 + 1y^2 - 1.92x - 4y + 8.76
@@ -36,11 +38,11 @@ A = np.array([  [ 1,   0,  -2],
 #                 [-2/9,  -2,   7]])
 
 
-B = np.array([  [ 0.105263,            0,      -0.210527],
-                [ 0,             1.66667,      -3.333335],
-                [-0.210527,    -3.333335,       5.39772]])
+# B = np.array([  [ 0.105263,            0,      -0.210527],
+#                 [ 0,             1.66667,      -3.333335],
+#                 [-0.210527,    -3.333335,       5.39772]])
 
-
+# 0.105263 x^2 - 0.421053 x + 1.66667 y^2 - 6.66667 y + 5.39772 = 0
 # ((x-2)^2)/9.5 + ((y-2)^2)/0.6 = 1.3^2
 
 ######################## FUNCTION ###########################
@@ -269,9 +271,24 @@ ax.autoscale()
 C = mix_conics_into_degenerate(A, B)
 g,h = split_degenerate_conic(C)
 
-# plot homogeneous lines
-plot_homogeneous_line(g, ax, x_range=(-10, 10))
-plot_homogeneous_line(h, ax, x_range=(-10, 10))
+
+#Symbolic solver
+# Define the variables
+x, y = sp.symbols('x y')
+# Define the two quadratic equations
+eq1 = x**2 + y**2 - 4 * x - 4 * y + 4
+# eq2 = 0.105263 * x**2 + 1.66667 * y**2 - 0.421053 * x - 6.66667 * y + 5.39772  # Last B
+eq2 = 1 * x**2 + 4 * y**2 - 12 * x - 16 * y + 48  
+# x^2 + 4y^2 - 12x - 16y + 48
+# Solve the system of equations
+solutions = sp.solve([eq1, eq2], (x, y))
+
+# x^2 + y^2 - 4x - 4y + 4
+# 0.105263 x^2 - 0.421053 x + 1.66667 y^2 - 6.66667 y + 5.39772 = 0
+
+sol = np.real_if_close(np.array(solutions).astype(complex))
+ax.scatter(sol[:,0], sol[:,1], color="xkcd:orange")
+
 
 ax.set_title('Ellipse from Conic Matrix')
 ax.grid(True)
