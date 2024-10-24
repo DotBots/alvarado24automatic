@@ -2,47 +2,25 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 import math
+import sympy as sp
 
 ####################### OPTIONS ############################
-# Circle of radius 2 centered at (2,2)
-# x^2 + y^2 - 4x - 4y + 4
-A = np.array([  [ 1,   0,  -2],
+x, y = sp.symbols('x y', complex=True)
+# Circle of radius 1 centered at (1,1)
+# x^2 + y^2 - 2x - 2y + 1
+A = np.array([  [ 1,   0,  -1],
+                [ 0,   1,  -1],
+                [-1,  -1,   1]])
+eqA = x**2 + y**2 - 2 * x - 2 * y + 1
+eqA_inf = x**2 + y**2
+
+# Circle of radius 1 centered at (2,2)
+# x^2 + y^2 - 4x - 4y + 7
+B = np.array([  [ 1,   0,  -2],
                 [ 0,   1,  -2],
-                [-2,  -2,   4]])
-
-
-# Ellipses of radius 2 and 1 (mayor axis == x-axis) centered at (4,2)
-# x^2 + 4y^2 - 12x - 16y + 48
-# B = np.array([  [ 1/4,   0,  -1],
-#                 [ 0,   1,  -2],
-#                 [-1,  -2,  7]])
-
-# Ellipses of width 5 and height 2 (mayor axis == x-axis) centered at (6,2)
-# 0.16x^2 + 1y^2 - 1.92x - 4y + 8.76
-# B = np.array([  [ 0.16,   0,  -0.96],
-#                 [ 0,   1,  -2],
-#                 [-0.96,  -2,  8.76]])
-
-# A = 0.16   # Coefficient of x^2
-# B = 0   # Coefficient of xy (no xy term)
-# C = 1   # Coefficient of y^2
-# D = -1.92 # Coefficient of x
-# E = -4 # Coefficient of y
-# F = 8.76  # Constant term
-
-# Ellipses of width 6 and height 2 (mayor axis == x-axis) centered at (2,2) roughly.
-# B = np.array([  [ 1/9,   0,  -2/9],
-#                 [ 0,     1,  -2],
-#                 [-2/9,  -2,   7]])
-
-
-B = np.array([  [ 0.105263,            0,      -0.210527],
-                [ 0,             1.66667,      -3.333335],
-                [-0.210527,    -3.333335,       5.39772]])
-
-
-# ((x-2)^2)/9.5 + ((y-2)^2)/0.6 = 1.3^2
-
+                [-2,  -2,   7]])
+eqB = x**2 + y**2 - 4 * x - 4 * y + 7
+eqB_inf = x**2 + y**2
 ######################## FUNCTION ###########################
 
 def cuberoot( z ):
@@ -107,65 +85,86 @@ def plot_conic_matrix_ellipse(conic_matrix, ax, color):
     
     ax.add_patch(ellipse)
 
+def intersect_line_with_conic(l, A):
+    """
+    Intersects a line (l) with a conic (A) and returns a list of points with the real and complex intersection.
+    might return None if there are no intersection
+    """
+    # Make sure tau (last element of the line) is not zero.
+
+    # Express l as a cross product matrix
+    Ml = np.array([[0,     l[2], -l[1]],
+                   [-l[2], 0,     l[0]],
+                   [l[1], -l[0],  0]])
+    
+    # Calculate alpha
+    B = Ml.T @ A @ Ml
+    if (abs(l[2]) > 1e-5):
+        tau = l[2]
+        alpha = 1/tau * np.emath.sqrt( -1* np.linalg.det(B[0:2, 0:2]))
+    else:
+        lmbd = l[0]
+        alpha = 1/lmbd * np.emath.sqrt( -1* np.linalg.det(B[1:3, 1:3]))
+
+    # If more than one solution is given by the square root, choose the first one
+    if type(alpha) == np.ndarray: alpha = alpha[0]
+
+    # Intersect the line and the conic
+    C = B + alpha * Ml
+
+    # Find a non-zero element of C and get the two intersecting points.
+    found_flag = False
+    # for i in reversed(range(C.shape[0])):
+    for i in range(C.shape[0]):
+        if found_flag: break
+        for j in range(C.shape[1]):
+            if abs(C[i][j]) > 1e-5:
+
+                p = C[i,:]  # get the full row
+                q = C[:,j]  # get the full column 
+                found_flag = True
+                break
+
+    # de-homogenize the points
+    p = p[0:2]/p[2]
+    q = q[0:2]/q[2]
+
+    # return intersecting points
+    return p,q
+
 def mix_conics_into_degenerate(A, B):
 
     # Mix Conics A and B into degenerate Conic C
 
-    # Get the cubic equation constant
-    # C = lambda * A + mu * B
-    # alpha * labda^3 + beta * labda^2 * mu + sigma * lambda * mu^2 + delta * mu^3
-    alpha = np.linalg.det(np.vstack((A[0], A[1], A[2])))
+    # form the cubic equation det|A + lambda*B| = 0
+    a = np.linalg.det(B)
+    b = (np.linalg.det(A + B) + np.linalg.det(A - B)) / 2 - np.linalg.det(A)
+    c = (np.linalg.det(A + B) - np.linalg.det(A - B)) / 2 - np.linalg.det(B)
+    d = np.linalg.det(A)
 
-    beta =  np.linalg.det(np.vstack((A[0], A[1], B[2]))) + \
-            np.linalg.det(np.vstack((A[0], B[1], A[2]))) + \
-            np.linalg.det(np.vstack((B[0], A[1], A[2]))) 
-    
-    sigma = np.linalg.det(np.vstack((A[0], B[1], B[2]))) + \
-            np.linalg.det(np.vstack((B[0], A[1], B[2]))) + \
-            np.linalg.det(np.vstack((B[0], B[1], A[2]))) 
+    # Solve cubic equation
+    delta0 = b**2 - 3*a*c
+    delta1 = 2*b**3 - 9*a*b*c + 27*d*a**2
+    for i in range(3):
+        omega_min = cuberoot((delta1 - np.emath.sqrt(delta1**2 - 4*delta0**3))/2)[i]
+        omega_plus = cuberoot((delta1 + np.emath.sqrt(delta1**2 - 4*delta0**3))/2)[i]
 
-    delta = np.linalg.det(np.vstack((B[0], B[1], B[2])))
+        # Get the solution points
+        k = 0
+        sol = {}
+        for k in range(3):
+            sol[k] = - (b + np.e**(1j*2*np.pi*k/3)*omega_plus + np.e**(1j*-2*np.pi*k/3)*omega_min ) / 3*a
+            sol[k] = np.real_if_close(sol[k])
 
-    # Solve the cubic equation
-    W = -2*(beta**3) + 9*alpha*beta*sigma - 27*(alpha**2)*delta
-    D = -(beta**2)*(sigma**2) + 4*alpha*(sigma**3) + 4*(beta**3)*delta - 18*alpha*beta*sigma*delta + 27*(alpha**2)*(delta**3)
-    Q = W - alpha*np.emath.sqrt(27*D)
-    # Check if there is more than one result of the square root
-    # if type(Q) == np.ndarray: Q = Q[0]
-    R = cuberoot(4*Q)[0]
-    L = np.array([2*(beta**2) - 6*alpha*sigma, -beta, R]).reshape((3,1))
-    M = np.array([3*alpha*R, 3*alpha, 2*3*alpha]).reshape((3,1))
+        # Get lambda and mu
+        lmbd = -3*a
+        mu = b + omega_min + omega_plus
 
-    # Get the solution points
-    w = -1/2 + 1j*np.sqrt(3/4)
-    ww = np.array([[w,    1,  w**2],
-                   [1,    1,  1],
-                   [w**2, 1,  w]])
-    
-    lmbd_v = ww @ L
-    mu_v = ww @ M
-
-    # Check if any result is real, and choose it
-    found_result = False
-    for i in range(lmbd_v.shape[0]):
-        if np.isreal(lmbd_v[i]) and np.isreal(mu_v[i]) and ((lmbd_v[i] > 1e-5) or (mu_v[i] > 1e-5)):
-            lmbd = lmbd_v[i]
-            mu = mu_v[i]
-            found_result = True
+        if np.isreal(sol[0]) or np.isreal(sol[1]) or np.isreal(sol[2]): 
             break
 
-    # If no result is real, just choose a non-zero result
-    if not found_result:
-        for i in range(lmbd_v.shape[0]):
-            if ((lmbd_v[i] > 1e-5) or (mu_v[i] > 1e-5)):
-                lmbd = lmbd_v[i]
-                mu = mu_v[i]
-                found_result = True
-                break
-
-    # If no valid results is result
-    if not found_result:
-        raise ValueError("All mu and lambda == 0")
+    if not(np.isreal(sol[0]) or np.isreal(sol[1]) or np.isreal(sol[2])):
+        raise ValueError("no real roots")
     
     # Return degenerate conic
     C = lmbd * A + mu * B
@@ -272,6 +271,14 @@ g,h = split_degenerate_conic(C)
 # plot homogeneous lines
 plot_homogeneous_line(g, ax, x_range=(-10, 10))
 plot_homogeneous_line(h, ax, x_range=(-10, 10))
+
+# Intersect lines with conic
+p,q = intersect_line_with_conic(g,A)
+
+# plot intersection points
+if np.all(np.isreal(p)) and np.all(np.isreal(q)):
+    ax.scatter(p[0], p[1], color="xkcd:orange", label="interection points")
+    ax.scatter(q[0], q[1], color="xkcd:orange")
 
 ax.set_title('Ellipse from Conic Matrix')
 ax.grid(True)
