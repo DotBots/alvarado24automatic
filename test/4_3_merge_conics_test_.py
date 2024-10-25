@@ -61,7 +61,7 @@ def extract_ellipse_params(A, B, C, D, E, F):
     # Return the center, axes lengths, and angle
     return center, a, b, angle
 
-def plot_conic_matrix_ellipse(conic_matrix, ax, color):
+def plot_conic_matrix_ellipse(conic_matrix, ax, color, label=""):
     # Extract the elements from the matrix
     A = conic_matrix[0, 0]
     B = 2 * conic_matrix[0, 1]  # Note: we double since the matrix stores B/2
@@ -81,7 +81,8 @@ def plot_conic_matrix_ellipse(conic_matrix, ax, color):
                                              height = 2 * b,
                                              angle = angle, 
                                              edgecolor = color, 
-                                             facecolor = 'none')
+                                             facecolor = 'none',
+                                             label = label)
     
     ax.add_patch(ellipse)
 
@@ -142,32 +143,54 @@ def mix_conics_into_degenerate(A, B):
     c = (np.linalg.det(A + B) - np.linalg.det(A - B)) / 2 - np.linalg.det(B)
     d = np.linalg.det(A)
 
+    # Normalize the cubic equation
+    magnitude = np.linalg.norm([a,b,c,d])
+    a /= magnitude
+    b /= magnitude
+    c /= magnitude
+    d /= magnitude
+
     # Solve cubic equation
-    delta0 = b**2 - 3*a*c
-    delta1 = 2*b**3 - 9*a*b*c + 27*d*a**2
-    for i in range(3):
-        omega_min = cuberoot((delta1 - np.emath.sqrt(delta1**2 - 4*delta0**3))/2)[i]
-        omega_plus = cuberoot((delta1 + np.emath.sqrt(delta1**2 - 4*delta0**3))/2)[i]
+    delta0 = b*b - 3*a*c
+    delta1 = 2*b*b*b - 9*a*b*c + 27*a*a*d
+    delta01 = delta1 * delta1 - 4 * delta0 * delta0 * delta0
 
-        # Get the solution points
-        k = 0
-        sol = {}
-        for k in range(3):
-            sol[k] = - (b + np.e**(1j*2*np.pi*k/3)*omega_plus + np.e**(1j*-2*np.pi*k/3)*omega_min ) / 3*a
-            sol[k] = np.real_if_close(sol[k])
+    # Accomodate sign
+    s0 = np.sign(delta0) + 1*( np.sign(delta0) == 0)
+    s1 = np.sign(delta1) + 1*( np.sign(delta1) == 0)
 
-        # Get lambda and mu
-        lmbd = -3*a
-        mu = b + omega_min + omega_plus
+    omega_p = s1 * np.emath.power((np.abs(delta1) + np.emath.sqrt(delta01))/2, 1/3)
+    omega_m = s0*s1 * np.emath.power(s0*(np.abs(delta1) - np.emath.sqrt(delta01))/2, 1/3)
 
-        if np.isreal(sol[0]) or np.isreal(sol[1]) or np.isreal(sol[2]): 
-            break
+    # Get the real root of the cubic equation
+    lmbd = -3*a
+    mu = b + np.real(omega_m + omega_p)
 
-    if not(np.isreal(sol[0]) or np.isreal(sol[1]) or np.isreal(sol[2])):
-        raise ValueError("no real roots")
-    
-    # Return degenerate conic
     C = lmbd * A + mu * B
+
+    # for i in range(3):
+    #     omega_min = cuberoot((delta1 - np.emath.sqrt(delta1**2 - 4*delta0**3))/2)[i]
+    #     omega_plus = cuberoot((delta1 + np.emath.sqrt(delta1**2 - 4*delta0**3))/2)[i]
+
+    #     # Get the solution points
+    #     k = 0
+    #     sol = {}
+    #     for k in range(3):
+    #         sol[k] = - (b + np.e**(1j*2*np.pi*k/3)*omega_plus + np.e**(1j*-2*np.pi*k/3)*omega_min ) / 3*a
+    #         sol[k] = np.real_if_close(sol[k])
+
+    #     # Get lambda and mu
+    #     lmbd = -3*a
+    #     mu = b + omega_min + omega_plus
+
+    #     if np.isreal(sol[0]) or np.isreal(sol[1]) or np.isreal(sol[2]): 
+    #         break
+
+    # if not(np.isreal(sol[0]) or np.isreal(sol[1]) or np.isreal(sol[2])):
+    #     raise ValueError("no real roots")
+    
+    # # Return degenerate conic
+    # C = lmbd * A + mu * B
     return C
 
 def split_degenerate_conic(A):
@@ -176,7 +199,8 @@ def split_degenerate_conic(A):
     Split the degenerate conic A into two homogeneous cordinates lines g and h
     """
 
-    # Get upper triangular portion of degenerate conic A
+    # Get the conjugate transpose of A
+    B = np.asarray(np.asmatrix(A).H)
     B = np.triu(A)
 
     # Find a non-zero diagonal element of B and calculate the intersection point p
@@ -220,7 +244,7 @@ def split_degenerate_conic(A):
     # return the two intersecting lines of the degenerate conic
     return g,h
 
-def plot_homogeneous_line(line, ax, x_range=(-10, 10)):
+def plot_homogeneous_line(line, ax, x_range=(-10, 10), color="xkcd:green",label=""):
     """
     Plots a line given in homogeneous coordinates (a, b, c) where the line is ax + by + c = 0.
     
@@ -243,7 +267,7 @@ def plot_homogeneous_line(line, ax, x_range=(-10, 10)):
         y_vals = line_eq(x_vals)
         
         # Plot the line using only two points
-        ax.plot(x_vals, y_vals, label=f'{a}x + {b}y + {c} = 0')
+        ax.plot(x_vals, y_vals, color="xkcd:green",label=label)
     
     else:
         # If b = 0, the line is vertical (x = -c/a), just plot a vertical line
@@ -260,28 +284,30 @@ ax = fig.add_subplot(gs[0:3, 0:3])
 ax.set_aspect('equal', 'box')
 
 # Plot original conics
-plot_conic_matrix_ellipse(A, ax, 'xkcd:blue')
-plot_conic_matrix_ellipse(B, ax, 'xkcd:red')
+plot_conic_matrix_ellipse(A, ax, 'xkcd:blue', label = "conic 1")
+plot_conic_matrix_ellipse(B, ax, 'xkcd:red', label = "conic 2")
 ax.autoscale()
 
 # Create middle degenerate conic
 C = mix_conics_into_degenerate(A, B)
-g,h = split_degenerate_conic(C)
+# g,h = split_degenerate_conic(C)
+g = np.array([1,1,-3])
 
 # plot homogeneous lines
-plot_homogeneous_line(g, ax, x_range=(-10, 10))
-plot_homogeneous_line(h, ax, x_range=(-10, 10))
+plot_homogeneous_line(g, ax, x_range=(-10, 10), color = "xkcd:green",label="degenerate mix")
+# plot_homogeneous_line(h, ax, x_range=(-10, 10))
 
 # Intersect lines with conic
-p,q = intersect_line_with_conic(g,A)
+# p,q = intersect_line_with_conic(g,A)
 
 # plot intersection points
-if np.all(np.isreal(p)) and np.all(np.isreal(q)):
-    ax.scatter(p[0], p[1], color="xkcd:orange", label="interection points")
-    ax.scatter(q[0], q[1], color="xkcd:orange")
+# if np.all(np.isreal(p)) and np.all(np.isreal(q)):
+#     ax.scatter(p[0], p[1], color="xkcd:orange", label="interection points")
+#     ax.scatter(q[0], q[1], color="xkcd:orange")
 
 ax.set_title('Ellipse from Conic Matrix')
 ax.grid(True)
+ax.legend()
 # ax.set_xlim([-1,None])
 # ax.set_ylim([-1,None])
     
