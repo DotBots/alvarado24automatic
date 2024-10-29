@@ -8,19 +8,23 @@ import sympy as sp
 x, y = sp.symbols('x y', complex=True)
 # Circle of radius 1 centered at (1,1)
 # x^2 + y^2 - 2x - 2y + 1
-A = np.array([  [ 1,   0,  -1],
-                [ 0,   1,  -1],
-                [-1,  -1,   1]])
-eqA = x**2 + y**2 - 2 * x - 2 * y + 1
-eqA_inf = x**2 + y**2
+# A = np.array([  [ 1,   0,  -1],
+#                 [ 0,   1,  -1],
+#                 [-1,  -1,   1]])
+
+# Ellipse centered at (2,2), h-radius = 1.4, v-radius = 0.6
+# 0.5x^2 + 3.33333y^2 - 2x - 13.33333y + 14.3333333
+A = np.array([  [ 0.5,   0,  -1],
+                [ 0,   3.33333,  -6.6666],
+                [-1,  -6.6666,   14.333333]])
+
 
 # Circle of radius 1 centered at (2,2)
 # x^2 + y^2 - 4x - 4y + 7
 B = np.array([  [ 1,   0,  -2],
                 [ 0,   1,  -2],
                 [-2,  -2,   7]])
-eqB = x**2 + y**2 - 4 * x - 4 * y + 7
-eqB_inf = x**2 + y**2
+
 ######################## FUNCTION ###########################
 
 def cuberoot( z ):
@@ -290,8 +294,8 @@ ax.autoscale()
 
 # Create middle degenerate conic
 C = mix_conics_into_degenerate(A, B)
-# g,h = split_degenerate_conic(C)
-g = np.array([1,1,-3])
+g,h = split_degenerate_conic(C)
+# g = np.array([1,1,-3])
 
 # plot homogeneous lines
 plot_homogeneous_line(g, ax, x_range=(-10, 10), color = "xkcd:green",label="degenerate mix")

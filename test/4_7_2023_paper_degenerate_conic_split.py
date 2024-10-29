@@ -3,12 +3,22 @@ import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 
 ####################### OPTIONS ############################
-# Degenerate conic, X centered at  (1,0)
-A = np.array([  [ 1,   1,  -1],
-                [-1,  -1,   1],
-                [ 1,   1,  -1]])
+# Degenerate conic, X centered at  (2,2)
+# y = x
+# y = 4 - x
+# A = np.array([  [ 1,   0,  -2],
+#                 [ 0,  -1,   2],
+#                 [-2,   2,   0]])
 
-# Should result in these two lines: [1,1,-1], [1,-1,1]
+# Degenerate conic, X centered at  (2,3)
+# y = x + 1
+# y = 5 - x
+A = np.array([  [ 1,   0,  -2],
+                [ 0,  -1,   3],
+                [-2,   3,   -5]])
+
+
+
 
 
 # Degenerate conic, Dual line collapsed. Vertical line at x=2
@@ -28,46 +38,75 @@ def split_degenerate_conic(A):
     Split the degenerate conic A into two homogeneous cordinates lines g and h
     """
 
-    # Get upper triangular portion of degenerate conic A
-    B = np.triu(A)
 
-    # Find a non-zero diagonal element of B and calculate the intersection point p
-    for i in range(B.shape[0]):
-    # for i in reversed(range(B.shape[0])):
+    # Normalize the matrix
+    a = A[0, 0]
+    b = 2 * A[0, 1]  # Note: we double since the matrix stores B/2
+    c = A[1, 1]
+    d = 2 * A[0, 2]
+    e = 2 * A[1, 2]
+    f = A[2, 2]
 
-        if abs(B[i][i]) > 1e-5:
-            beta = np.sqrt(B[i][i])
+    # scale = np.linalg.norm(A)
+    # A_scaled = A / scale
 
-            p = B[:,i] / beta
+    # a = A_scaled[0, 0]
+    # b = 2 * A_scaled[0, 1]  # Note: we double since the ma_scaledtrix stores B/2
+    # c = A_scaled[1, 1]
+    # d = 2 * A_scaled[0, 2]
+    # e = 2 * A_scaled[1, 2]
+    # f = A_scaled[2, 2]
 
-            break
 
-    # Express p as a cross product matrix
-    Mp = np.array([[0,     p[2], -p[1]],
-                   [-p[2], 0,     p[0]],
-                   [p[1], -p[0],  0]])
+    # Compute the adjoint matrix
+    adjoint = np.array([      [b*f-e*e/4, (d*e)/4-(c*f)/2, (c*e)/4-(b*d)/2],
+                    [(d*e)/4-(c*f)/2, a*f-d*d/4      , (c*d)/4-(a*e)/2],
+                    [(c*e)/4-(b*d)/2,(c*d)/4-(a*e)/2,a*b-c*c/4       ]])
     
-    # get the matrix from which we will extract the points.
-    C = A + Mp
-    
-    # Find a non-zero element of C and get the two intersecting lines.
-    found_flag = False
-    # for i in reversed(range(C.shape[0])):
-    for i in range(C.shape[0]):
-        if found_flag: break
-        for j in range(C.shape[1]):
-            if abs(C[i][j]) > 1e-5:
+    # find the smallest, non-zero diagonal element
+    diag = np.emath.sqrt(-np.diag(adjoint))
+    i = np.argmax(diag)
 
-                g = C[i,:]  # get the full row
-                h = C[:,j]  # get the full column 
-                found_flag = True
-                break
+    i = 2
+
+    # Compute intersection point between lines:
+    p = np.array([ adjoint[i][0] / diag[i] ,
+                   adjoint[i][1] / diag[i] ,
+                   adjoint[i][2] / diag[i] ,
+                  ])
+    p = np.real_if_close(p) # convert to real if possible
+
+    # compute N matrix
+    N = np.array([  [a,            c/2 - p[2],  d/2 + p[1]],
+                    [c/2 + p[2],       b,       e/2 - p[0]],
+                    [d/2 - p[1],   e/2 + p[0],      f  ]])
 
 
-    # Normalize lines before returning them
-    g = g / np.linalg.norm(g[0:2])
-    h = h / np.linalg.norm(h[0:2])
+    # Get the highest valued row and column
+    col_max = 99
+    col_val_max = 0
+    row_max = 99
+    row_val_max = 0
+    for j in range(N.shape[0]):
+        # check if column is higher
+        if (N[1,j]**2 + N[2,j]**2) > col_val_max:
+            col_max = j
+            col_val_max = (N[1,j]**2 + N[2,j]**2)
 
+        # check if row is higher
+        if (N[j,1]**2 + N[j,2]**2) > row_val_max:
+            row_max = j
+            row_val_max = (N[j,1]**2 + N[j,2]**2)
+
+    u1, v1, w1 = N[:,col_max]
+    u2, v2, w2 = N[row_max,:]
+
+    # Compute the line parameters
+    alpha_1 = np.arctan2(v1, u1)
+    alpha_2 = np.arctan2(v2, u2)
+
+    g = np.array([np.cos(alpha_1), np.sin(alpha_1), w1 / np.emath.sqrt(u1*u1 + v1*v1)])
+    h = np.array([np.cos(alpha_2), np.sin(alpha_2), w2 / np.emath.sqrt(u2*u2 + v2*v2)])
 
     # return the two intersecting lines of the degenerate conic
     return g,h
