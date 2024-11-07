@@ -13,18 +13,18 @@ from matplotlib.gridspec import GridSpec
 # Degenerate conic, X centered at  (2,3)
 # y = x + 1
 # y = 5 - x
-A = np.array([  [ 1,   0,  -2],
-                [ 0,  -1,   3],
-                [-2,   3,   -5]])
+# A = np.array([  [ 1,   0,  -2],
+#                 [ 0,  -1,   3],
+#                 [-2,   3,   -5]])
 
 
 
 
 
 # Degenerate conic, Dual line collapsed. Vertical line at x=2
-# A = np.array([  [ 1,   0,  -2],
-#                 [ 0,   0,   0],
-#                 [ -2,   0,   4]])
+A = np.array([  [ 1,   0,  -2],
+                [ 0,   0,   0],
+                [ -2,   0,   4]])
 
 # Should result in one line: [1,0,-2]
 
@@ -59,9 +59,12 @@ def split_degenerate_conic(A):
 
 
     # Compute the adjoint matrix
-    adjoint = np.array([      [b*f-e*e/4, (d*e)/4-(c*f)/2, (c*e)/4-(b*d)/2],
-                    [(d*e)/4-(c*f)/2, a*f-d*d/4      , (c*d)/4-(a*e)/2],
-                    [(c*e)/4-(b*d)/2,(c*d)/4-(a*e)/2,a*b-c*c/4       ]])
+    # adjoint = np.array([      [b*f-e*e/4, (d*e)/4-(c*f)/2, (c*e)/4-(b*d)/2],
+    #                 [(d*e)/4-(c*f)/2, a*f-d*d/4      , (c*d)/4-(a*e)/2],
+    #                 [(c*e)/4-(b*d)/2,(c*d)/4-(a*e)/2,a*b-c*c/4       ]])
+    adjoint = np.array([[  c*f-e*e, -(b*f-d*e),  b*e-d*c ],
+                  [-(b*f-d*e),  a*f-d*d, -(a*e-b*d) ],
+                  [  b*e-d*c, -(a*e-b*d), (a*c-b*b) ]])
     
     # find the smallest, non-zero diagonal element
     diag = np.emath.sqrt(-np.diag(adjoint))
@@ -111,6 +114,69 @@ def split_degenerate_conic(A):
     # return the two intersecting lines of the degenerate conic
     return g,h
 
+def split_degenerate_conic_book(A):
+    """
+    Split the degenerate conic A into two homogeneous cordinates lines g and h
+    """
+
+    # Check if the conic is an X (rank 2), or double lines (rank 1)
+    rank = np.linalg.matrix_rank(A)
+
+    if rank == 3:
+        raise ValueError("Conic is not degenerate, Rank = 3")
+    if rank == 1:
+        C = A
+    if rank == 2:
+        # Extract the important matrix coefficient
+        a = A[0, 0]
+        b = A[0, 1] 
+        c = A[1, 1]
+        d = A[0, 2]
+        e = A[1, 2]
+        f = A[2, 2]
+
+        # Compute the adjoint matrix
+        B = np.array([[  c*f-e*e, -(b*f-d*e),  b*e-d*c ],
+                    [-(b*f-d*e),  a*f-d*d, -(a*e-b*d) ],
+                    [  b*e-d*c, -(a*e-b*d), (a*c-b*b) ]])
+        
+        # Find the smallest (non-zero) diagonal element of the adjoint 
+        for i in range(3):
+            if np.isclose(np.argsort(np.diag(B))[i],0): 
+                idx = i
+                break
+
+        # Get the intersection point of the lines
+        beta = np.emath.sqrt(B[idx,idx])
+        p = B[:,idx]/beta
+        # Normalize the point p
+        p = p/p[2]
+        p = np.real_if_close(p)
+
+        # Get the corss product matrix
+        Mp = np.array([[   0,   p[2], -p[1] ],
+                    [-p[2],    0,   p[0] ],
+                    [ p[1], -p[0],    0]])
+        
+        # Get the degenerate  Rank-1 matrix
+        C = A + Mp
+
+    # Find a non-zero element and get the corresponding row and column
+    found = False
+    for i in range(3):
+
+        for j in range(3):
+
+            if not np.isclose( C[i][j] , 0):
+                g = C[i,:]
+                h = C[:,j]
+
+                found = True
+            if found: break
+        if found: break
+    
+    return g,h
+
 def plot_homogeneous_line(line, ax, x_range=(-10, 10)):
     """
     Plots a line given in homogeneous coordinates (a, b, c) where the line is ax + by + c = 0.
@@ -141,6 +207,8 @@ def plot_homogeneous_line(line, ax, x_range=(-10, 10)):
         x_vert = -c / a
         ax.axvline(x=x_vert, color='r', linestyle='--', label=f'Vertical line x = {x_vert}')
 
+
+
 ########################## MAIN ###########################
 
 
@@ -155,8 +223,8 @@ ax = fig.add_subplot(gs[0:3, 0:3])
 ax.set_aspect('equal', 'box')
 
 # Create middle degenerate conic
-g,h = split_degenerate_conic(A)
-
+# g1,h1 = split_degenerate_conic(A)
+g, h = split_degenerate_conic_book(A)
 print(f"lines:\np={g}\np={h}")
 
 # plot homogeneous lines
