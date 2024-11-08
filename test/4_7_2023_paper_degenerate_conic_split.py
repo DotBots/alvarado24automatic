@@ -18,13 +18,17 @@ from matplotlib.gridspec import GridSpec
 #                 [-2,   3,   -5]])
 
 
+A = np.array([  [ -0.197931,   0,  0.791724/2],
+                [ 0,  0.924242,   - 3.69697/2],
+                [0.791724/2,   - 3.69697/2,   2.90524]])
 
-
+# -0.19793055*x**2 + 0.7917222*x + 0.9242424*y**2 - 3.6969221*y + 2.90515236
+# -0.197931 x^2 + 0.791724 x + 0.924242 y^2 - 3.69697 y + 2.90524 = 0
 
 # Degenerate conic, Dual line collapsed. Vertical line at x=2
-A = np.array([  [ 1,   0,  -2],
-                [ 0,   0,   0],
-                [ -2,   0,   4]])
+# A = np.array([  [ 1,   0,  -2],
+#                 [ 0,   0,   0],
+#                 [ -2,   0,   4]])
 
 # Should result in one line: [1,0,-2]
 
@@ -32,7 +36,7 @@ A = np.array([  [ 1,   0,  -2],
 
 ######################## FUNCTION ###########################
 
-def split_degenerate_conic(A):
+def split_degenerate_conic_paper(A):
 
     """
     Split the degenerate conic A into two homogeneous cordinates lines g and h
@@ -41,48 +45,29 @@ def split_degenerate_conic(A):
 
     # Normalize the matrix
     a = A[0, 0]
-    b = 2 * A[0, 1]  # Note: we double since the matrix stores B/2
+    b = A[0, 1]  # Note: we double since the matrix stores B/2
     c = A[1, 1]
-    d = 2 * A[0, 2]
-    e = 2 * A[1, 2]
+    d = A[0, 2]
+    e = A[1, 2]
     f = A[2, 2]
 
-    # scale = np.linalg.norm(A)
-    # A_scaled = A / scale
-
-    # a = A_scaled[0, 0]
-    # b = 2 * A_scaled[0, 1]  # Note: we double since the ma_scaledtrix stores B/2
-    # c = A_scaled[1, 1]
-    # d = 2 * A_scaled[0, 2]
-    # e = 2 * A_scaled[1, 2]
-    # f = A_scaled[2, 2]
-
-
     # Compute the adjoint matrix
-    # adjoint = np.array([      [b*f-e*e/4, (d*e)/4-(c*f)/2, (c*e)/4-(b*d)/2],
-    #                 [(d*e)/4-(c*f)/2, a*f-d*d/4      , (c*d)/4-(a*e)/2],
-    #                 [(c*e)/4-(b*d)/2,(c*d)/4-(a*e)/2,a*b-c*c/4       ]])
-    adjoint = np.array([[  c*f-e*e, -(b*f-d*e),  b*e-d*c ],
+    B = np.array([[  c*f-e*e, -(b*f-d*e),  b*e-d*c ],
                   [-(b*f-d*e),  a*f-d*d, -(a*e-b*d) ],
                   [  b*e-d*c, -(a*e-b*d), (a*c-b*b) ]])
     
-    # find the smallest, non-zero diagonal element
-    diag = np.emath.sqrt(-np.diag(adjoint))
-    i = np.argmax(diag)
+    # Find the smallest (non-zero) diagonal element of the adjoint
+    diag_B = np.diag(B)
+    for i in range(3):
+        if not np.isclose(diag_B[np.argsort(diag_B)[i]],0): 
+            idx = np.argsort(diag_B)[i]
+            break
 
-    i = 2
-
-    # Compute intersection point between lines:
-    p = np.array([ adjoint[i][0] / diag[i] ,
-                   adjoint[i][1] / diag[i] ,
-                   adjoint[i][2] / diag[i] ,
-                  ])
-    p = np.real_if_close(p) # convert to real if possible
-
-    # compute N matrix
-    N = np.array([  [a,            c/2 - p[2],  d/2 + p[1]],
-                    [c/2 + p[2],       b,       e/2 - p[0]],
-                    [d/2 - p[1],   e/2 + p[0],      f  ]])
+    # Create the degenerate rank 1 matrix
+    D = np.array([  [0,       -B[idx,2],   B[idx,1]],
+                    [B[idx,2],      0,    -B[idx,0]],
+                    [-B[idx,1],   B[idx,0],     0  ]]) / np.emath.sqrt(-B[idx,idx])
+    N = A + D
 
 
     # Get the highest valued row and column
@@ -104,14 +89,16 @@ def split_degenerate_conic(A):
     u1, v1, w1 = N[:,col_max]
     u2, v2, w2 = N[row_max,:]
 
-    # Compute the line parameters
-    alpha_1 = np.arctan2(v1, u1)
-    alpha_2 = np.arctan2(v2, u2)
+    # # Compute the line parameters
+    # alpha_1 = np.arctan2(v1, u1)
+    # alpha_2 = np.arctan2(v2, u2)
 
-    g = np.array([np.cos(alpha_1), np.sin(alpha_1), w1 / np.emath.sqrt(u1*u1 + v1*v1)])
-    h = np.array([np.cos(alpha_2), np.sin(alpha_2), w2 / np.emath.sqrt(u2*u2 + v2*v2)])
+    # g = np.array([np.cos(alpha_1), np.sin(alpha_1), w1 / np.emath.sqrt(u1*u1 + v1*v1)])
+    # h = np.array([np.cos(alpha_2), np.sin(alpha_2), w2 / np.emath.sqrt(u2*u2 + v2*v2)])
 
     # return the two intersecting lines of the degenerate conic
+    h = np.array([u1, v1, w1])
+    g = np.array([u2, v2, w2])
     return g,h
 
 def split_degenerate_conic_book(A):
@@ -135,22 +122,42 @@ def split_degenerate_conic_book(A):
         e = A[1, 2]
         f = A[2, 2]
 
+        # TODO Figure out how to handle horizontal and vertical lines
+        # Handle the case of a completely vertical or completely horizontal line
+        # Vertical
+        if np.isclose(b,0) and np.isclose(c,0) and np.isclose(e, 0):
+            roots = np.roots([a, 2*d, f])
+            g = np.array([1, 0, -roots[0]])
+            h = np.array([1, 0, -roots[1]])
+            return g,h
+        
+        # Horizontal
+        if np.isclose(a,0) and np.isclose(b,0) and np.isclose(d, 0):
+            roots = np.roots([c, 2*e, f])
+            g = np.array([0, 1, -roots[0]])
+            h = np.array([0, 1, -roots[1]])
+            return g,h
+
+
+        # If it is a more complex type of line, continue with the full algorithm
         # Compute the adjoint matrix
         B = np.array([[  c*f-e*e, -(b*f-d*e),  b*e-d*c ],
                     [-(b*f-d*e),  a*f-d*d, -(a*e-b*d) ],
                     [  b*e-d*c, -(a*e-b*d), (a*c-b*b) ]])
         
         # Find the smallest (non-zero) diagonal element of the adjoint 
+        diag_B = np.diag(B)
         for i in range(3):
-            if np.isclose(np.argsort(np.diag(B))[i],0): 
-                idx = i
+            if not np.isclose(diag_B[np.argsort(diag_B)[i]],0): 
+                idx = np.argsort(diag_B)[i]
                 break
 
         # Get the intersection point of the lines
         beta = np.emath.sqrt(B[idx,idx])
         p = B[:,idx]/beta
         # Normalize the point p
-        p = p/p[2]
+        if not np.isclose(p[2], 0):
+            p = p/p[2]
         p = np.real_if_close(p)
 
         # Get the corss product matrix
@@ -164,7 +171,6 @@ def split_degenerate_conic_book(A):
     # Find a non-zero element and get the corresponding row and column
     found = False
     for i in range(3):
-
         for j in range(3):
 
             if not np.isclose( C[i][j] , 0):
@@ -223,9 +229,10 @@ ax = fig.add_subplot(gs[0:3, 0:3])
 ax.set_aspect('equal', 'box')
 
 # Create middle degenerate conic
-# g1,h1 = split_degenerate_conic(A)
+g1,h1 = split_degenerate_conic_paper(A)
 g, h = split_degenerate_conic_book(A)
 print(f"lines:\np={g}\np={h}")
+print(f"lines 1:\np1={g}\np1={h}")
 
 # plot homogeneous lines
 plot_homogeneous_line(g, ax, x_range=(-10, 10))

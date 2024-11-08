@@ -21,9 +21,19 @@ def conic_matrix_to_polynomial(conic_matrix):
 # conic_matrix = np.array([[-1.12217296e+00,  0.00000000e+00,  2.24434591e+00],
 #        [ 0.00000000e+00,  6.11006579e-10,  2.37624685e-05],
 #        [ 2.24434591e+00,  2.37624685e-05, -3.56454447e+00]])
-conic_matrix = np.array([  [ 1,   1,  -1],
-                           [-1,  -1,   1],
-                           [ 1,   1,  -1]])
+
+# conic_matrix = np.array([[ 0.02210188,  0.        , -0.02210188],
+#                          [ 0.        , -0.17681507,  0.35363014],
+#                          [-0.02210188,  0.35363014, -0.6851584 ]])
+
+conic_matrix = np.array([[-0.19793055,  0.        ,  0.3958611 ],
+                         [ 0.        ,  0.9242424 , -1.84846105],
+                         [ 0.3958611 , -1.84846105,  2.90515236]])
+
+
+# conic_matrix = np.array([  [ 1,   1,  -1],
+#                            [-1,  -1,   1],
+#                            [ 1,   1,  -1]])
 
 # Get the polynomial form
 polynomial_form = conic_matrix_to_polynomial(conic_matrix)

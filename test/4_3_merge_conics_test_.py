@@ -168,9 +168,17 @@ def mix_conics_into_degenerate(A, B):
 
     # Get the real root of the cubic equation
     lmbd = -3*a
-    mu = b + np.real(omega_m + omega_p)
+    mu = b + np.real_if_close(omega_m + omega_p)
 
     C = lmbd * A + mu * B
+
+    # Get the other 2 roots of the cubic equation
+    mu1 = b + np.real_if_close(np.exp(-1j*np.pi*2/3) * omega_m + np.exp(1j*np.pi*2/3) * omega_p)
+    mu2 = b + np.real_if_close(np.exp(-1j*np.pi*2/3*2)*omega_m + np.exp(1j*np.pi*2/3*2)*omega_p)
+
+    C1 = lmbd * A + mu1 * B
+    C2 = lmbd * A + mu2 * B
+
 
     # for i in range(3):
     #     omega_min = cuberoot((delta1 - np.emath.sqrt(delta1**2 - 4*delta0**3))/2)[i]
@@ -195,7 +203,7 @@ def mix_conics_into_degenerate(A, B):
     
     # # Return degenerate conic
     # C = lmbd * A + mu * B
-    return C
+    return C, C1, C2
 
 def split_degenerate_conic(A):
 
@@ -293,7 +301,7 @@ plot_conic_matrix_ellipse(B, ax, 'xkcd:red', label = "conic 2")
 ax.autoscale()
 
 # Create middle degenerate conic
-C = mix_conics_into_degenerate(A, B)
+C,_,_ = mix_conics_into_degenerate(A, B)
 g,h = split_degenerate_conic(C)
 # g = np.array([1,1,-3])
 

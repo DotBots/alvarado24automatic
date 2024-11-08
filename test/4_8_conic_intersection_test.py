@@ -6,15 +6,15 @@ from matplotlib.gridspec import GridSpec
 
 # Circle, p=[2,2], r=2
 # x^2 + y^2 - 4x - 4y + 4 = 0
-A = np.array([[1, 0, -2],
-              [0, 1, -2],
-              [-2, -2, 4]])
+# A = np.array([[1, 0, -2],
+#               [0, 1, -2],
+#               [-2, -2, 4]])
 
 # Ellipses, p[3,2], a=10, b=1
-# 1/10 x^2 + 1y^2 - 3/5x - 4 + 39/10 = 0  
-B = np.array([[1/10,   0, -3/10],
-              [0,      1,    -2],
-              [-3/10, -2, 39/10]])
+# 1/10 x^2 + 1y^2 - 3/5x - 4y + 39/10 = 0  
+# B = np.array([[1/10,   0, -3/10],
+#               [0,      1,    -2],
+#               [-3/10, -2, 39/10]])
 
 
 # Intersection points:
@@ -26,6 +26,21 @@ B = np.array([[1/10,   0, -3/10],
 # Intersection lines:
 #  0.353553 x  + 1.64645 = y
 # -0.353553 x  + 2.35355 = y
+
+
+
+# # Ellipse centered at (2,2), h-radius = 1.4, v-radius = 0.6
+# # 0.5x^2 + 3.33333y^2 - 2x - 13.33333y + 14.3333333
+A = np.array([  [ 0.5,   0,  -1],
+                [ 0,   3.33333,  -6.6666],
+                [-1,  -6.6666,   14.333333]])
+
+
+# # Circle of radius 1 centered at (2,2)
+# # x^2 + y^2 - 4x - 4y + 7
+B = np.array([  [ 1,   0,  -2],
+                [ 0,   1,  -2],
+                [-2,  -2,   7]])
 
 
 
@@ -83,18 +98,20 @@ def split_degenerate_conic(A):
         e = A[1, 2]
         f = A[2, 2]
 
-
+        # TODO Figure out how to handle horizontal and vertical lines
         # Handle the case of a completely vertical or completely horizontal line
         # Vertical
         if np.isclose(b,0) and np.isclose(c,0) and np.isclose(e, 0):
-            g = np.array([1, 0, -1*a*(-2*d + np.emath.sqrt(4*d*d - 4*a*f)/(2*a))])
-            h = np.array([1, 0, -1*a*(-2*d - np.emath.sqrt(4*d*d - 4*a*f)/(2*a))])
+            roots = np.roots([a, 2*d, f])
+            g = np.array([1, 0, -roots[0]])
+            h = np.array([1, 0, -roots[1]])
             return g,h
         
         # Horizontal
         if np.isclose(a,0) and np.isclose(b,0) and np.isclose(d, 0):
-            g = np.array([1, 0, -1*(-2*e + np.emath.sqrt(4*e*e - 4*c*f)/(2*c))])
-            h = np.array([1, 0, -1*(-2*e - np.emath.sqrt(4*e*e - 4*c*f)/(2*c))])
+            roots = np.roots([c, 2*e, f])
+            g = np.array([0, 1, -roots[0]])
+            h = np.array([0, 1, -roots[1]])
             return g,h
 
 
@@ -174,32 +191,14 @@ def mix_conics_into_degenerate(A, B):
     # Get the real root of the cubic equation
     lmbd = -3*a
     mu = b + np.real(omega_m + omega_p)
-
     C = lmbd * A + mu * B
 
-    # for i in range(3):
-    #     omega_min = cuberoot((delta1 - np.emath.sqrt(delta1**2 - 4*delta0**3))/2)[i]
-    #     omega_plus = cuberoot((delta1 + np.emath.sqrt(delta1**2 - 4*delta0**3))/2)[i]
+    # Get the other 2 roots of the cubic equation
+    mu1 = b + np.real_if_close(np.exp(-1j*np.pi*2/3) * omega_m + np.exp(1j*np.pi*2/3) * omega_p)
+    mu2 = b + np.real_if_close(np.exp(-1j*np.pi*2/3*2)*omega_m + np.exp(1j*np.pi*2/3*2)*omega_p)
 
-    #     # Get the solution points
-    #     k = 0
-    #     sol = {}
-    #     for k in range(3):
-    #         sol[k] = - (b + np.e**(1j*2*np.pi*k/3)*omega_plus + np.e**(1j*-2*np.pi*k/3)*omega_min ) / 3*a
-    #         sol[k] = np.real_if_close(sol[k])
-
-    #     # Get lambda and mu
-    #     lmbd = -3*a
-    #     mu = b + omega_min + omega_plus
-
-    #     if np.isreal(sol[0]) or np.isreal(sol[1]) or np.isreal(sol[2]): 
-    #         break
-
-    # if not(np.isreal(sol[0]) or np.isreal(sol[1]) or np.isreal(sol[2])):
-    #     raise ValueError("no real roots")
-    
-    # # Return degenerate conic
-    # C = lmbd * A + mu * B
+    C1 = lmbd * A + mu1 * B
+    C2 = lmbd * A + mu2 * B
 
     # Make sure close to zero components are actually zero
     for i in range(3):
@@ -207,9 +206,60 @@ def mix_conics_into_degenerate(A, B):
 
             if np.isclose( C[i][j] , 0):
                 C[i,j] = 0
+            if np.isclose( C1[i][j] , 0):
+                C1[i,j] = 0
+            if np.isclose( C2[i][j] , 0):
+                C2[i,j] = 0
     
+    return C, C1, C2
+    # return C
 
-    return C
+def intersect_line_with_conic(l, A):
+    """
+    Intersects a line (l) with a conic (A) and returns a list of points with the real and complex intersection.
+    might return None if there are no intersection
+    """
+    # Make sure tau (last element of the line) is not zero.
+
+    # Express l as a cross product matrix
+    Ml = np.array([[0,     l[2], -l[1]],
+                   [-l[2], 0,     l[0]],
+                   [l[1], -l[0],  0]])
+    
+    # Calculate alpha
+    B = Ml.T @ A @ Ml
+    if not np.isclose( l[2] , 0):
+        tau = l[2]
+        alpha = 1/tau * np.emath.sqrt( -1* np.linalg.det(B[0:2, 0:2]))
+    else:
+        lmbd = l[0]
+        alpha = 1/lmbd * np.emath.sqrt( -1* np.linalg.det(B[1:3, 1:3]))
+
+    # If more than one solution is given by the square root, choose the first one
+    if type(alpha) == np.ndarray: alpha = alpha[0]
+
+    # Intersect the line and the conic
+    C = B + alpha * Ml
+
+    # Find a non-zero element of C and get the two intersecting points.
+    found = False
+    for i in range(3):
+        for j in range(3):
+
+            if not np.isclose( C[i][j] , 0):
+                p = C[i,:]
+                q = C[:,j]
+
+                found = True
+            if found: break
+        if found: break
+
+    # de-homogenize the points
+    p = p[0:2]/p[2]
+    q = q[0:2]/q[2]
+
+    # return intersecting points
+    return p,q
 
 def plot_conic_matrix_ellipse(conic_matrix, ax, color, label=""):
     # Extract the elements from the matrix
@@ -286,15 +336,29 @@ plot_conic_matrix_ellipse(B, ax, 'xkcd:red', label = "conic 2")
 ax.autoscale()
 
 # Create middle degenerate conic
-C = mix_conics_into_degenerate(A, B)
+# C = mix_conics_into_degenerate(A, B)
+C, C1, C2 = mix_conics_into_degenerate(A, B)
+
+# TODO: find a way to auto select the best possible  degenerate mix conic. Rank 2, and 2 parallel lines
+# Create middle degenerate conic
+g,h = split_degenerate_conic(C1)
+print(f"lines:\np={g}\np={h}")
 
 # Create middle degenerate conic
-g,h = split_degenerate_conic(C)
-print(f"lines:\np={g}\np={h}")
+p,q = intersect_line_with_conic(g, A)
+p1,q1 = intersect_line_with_conic(h, A)
+print(f"intersections:\np={p}\np={q}")
 
 # plot homogeneous lines
 plot_homogeneous_line(g, ax, x_range=(-10, 10), color = "xkcd:green", label="degenerate mix")
 plot_homogeneous_line(h, ax, x_range=(-10, 10), color = "xkcd:green")
+
+# plot intersection points
+if np.all(np.isreal(p)) and np.all(np.isreal(q)):
+    ax.scatter(p[0], p[1], color="xkcd:orange", label="interection points")
+    ax.scatter(q[0], q[1], color="xkcd:orange")
+    ax.scatter(p1[0], p1[1], color="xkcd:orange")
+    ax.scatter(q1[0], q1[1], color="xkcd:orange")
 
 ax.set_title('Ellipse from Conic Matrix')
 ax.grid(True)
