@@ -2,6 +2,7 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
+import sympy as sp
 import cv2
 
 ####################### OPTIONS ############################
@@ -78,6 +79,62 @@ def fit_ellipse(points):
     residuals = a * x**2 + b * x*y + c * y**2 + d * x + e * y + f
 
     return params  # Returns the coefficients [A, B, C, D, E, F]
+
+# 6. Ellipses intersection
+def intersect_ellipses(C1, C2):
+    """
+    This function returns all imaginary intersection points of the Conic sections C1 and C2. In their standard form:
+    Ax^2 + Bxy + Cy^2 + Dx + Ey + F = 0
+    And in the homogenous form at infinite, where W=0
+    Ax^2 + Bxy + Cy^2 + Dxw + Eyw + Fw^2 = 0    ; thus
+    Ax^2 + Bxy + Cy^2 = 0
+    """
+
+    x,y = sp.symbols('x y')
+    # Standard form
+    eq1 = C1[0]*x**2 + C1[1]*x*y + C1[2]*y**2 + C1[3]*x + C1[4]*y + C1[5]
+    eq2 = C2[0]*x**2 + C2[1]*x*y + C2[2]*y**2 + C2[3]*x + C2[4]*y + C2[5]
+
+    # Homogeneous w=0 infinite equations
+    eq1_w = C1[0]*x**2 + C1[1]*x*y + C1[2]*y**2
+    eq2_w = C2[0]*x**2 + C2[1]*x*y + C2[2]*y**2 
+
+    solutions = sp.solve([eq1, eq2], (x,y))
+    solutions_w = sp.solve([eq1_w, eq2_w], (x,y))
+
+    # Convert solution to numpy
+    numeric_solution = np.array(solutions, dtype=np.complex128)
+    numeric_solution_w = np.array(solutions_w, dtype=np.complex128)
+
+    # Go one by one and get rid of floating point errors (real_if_close, close_to_zero)
+    for i in range(numeric_solution.shape[0]):
+        for j in range(numeric_solution.shape[1]):
+
+            # Check if number is real
+            numeric_solution[i][j] = np.real_if_close(numeric_solution[i][j])
+
+            # Check if real part is zero
+            if np.isclose(np.real(numeric_solution[i][j]),0): numeric_solution[i][j] = 1j * np.imag(numeric_solution[i][j]) 
+
+            # Check if number is zero
+            if np.isclose(np.real(numeric_solution[i][j]),0) and np.isclose(np.imag(numeric_solution[i][j]),0): numeric_solution[i][j] = 0
+
+    # Same as above, but for the homogeneous w=0 case
+    for i in range(numeric_solution_w.shape[0]):
+        for j in range(numeric_solution_w.shape[1]):
+
+            # Check if number is real
+            numeric_solution_w[i][j] = np.real_if_close(numeric_solution_w[i][j])
+
+            # Check if real part is zero
+            if np.isclose(np.real(numeric_solution_w[i][j]),0): numeric_solution_w[i][j] = 1j * np.imag(numeric_solution_w[i][j]) 
+
+            # Check if number is zero
+            if np.isclose(np.real(numeric_solution_w[i][j]),0) and np.isclose(np.imag(numeric_solution_w[i][j]),0): numeric_solution_w[i][j] = 0
+
+
+
+    return numeric_solution, numeric_solution_w 
 
 ######################## PLOTTING FUNCTION ###########################
 
@@ -156,6 +213,10 @@ def main():
     # Get the conic equation
     C1 = fit_ellipse(proj_points_1)
     C2 = fit_ellipse(proj_points_2)
+
+    # Get the intersection points
+    intersect_ellipses(C1, C2)
+    print("test")
 
 ########################## PLOT ###########################
 
