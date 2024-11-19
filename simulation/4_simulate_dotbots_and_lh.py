@@ -170,7 +170,15 @@ def extract_ellipse_params(A, B, C, D, E, F):
 
 def plot_conic_matrix_ellipse(conic_params, ax, color, label=""):
     # Extract the elements from the matrix
-    A, B, C, D, E, F = conic_params
+    if len(conic_params) == 6:
+        A, B, C, D, E, F = conic_params
+    if conic_params.shape == (3,3):
+        A = conic_params[0,0]
+        B = conic_params[1,0]
+        C = conic_params[1,1]
+        D = conic_params[0,2]
+        E = conic_params[1,2]
+        F = conic_params[2,2]
 
     # Form the general quadratic equation: Ax^2 + Bxy + Cy^2 + Dx + Ey + F = 0
     # Now solve for the center, axes, and angle of the ellipse.
@@ -215,8 +223,46 @@ def main():
     C2 = fit_ellipse(proj_points_2)
 
     # Get the intersection points
-    intersect_ellipses(C1, C2)
+    sol, sol_w = intersect_ellipses(C1, C2)
     print("test")
+
+    #evaluate the solutions
+    x1, y1 = sol[0]
+    x2, y2 = sol[1]
+    x3, y3 = sol[2]
+    x4, y4 = sol[3]
+
+    # eq1_1 = C1[0]*x1**2 + C1[1]*x1*y1 + C1[2]*y1**2 + C1[3]*x1 + C1[4]*y1 + C1[5]
+    # eq2_1 = C2[0]*x1**2 + C2[1]*x1*y1 + C2[2]*y1**2 + C2[3]*x1 + C2[4]*y1 + C2[5]
+
+    # eq1_2 = C1[0]*x2**2 + C1[1]*x2*y2 + C1[2]*y2**2 + C1[3]*x2 + C1[4]*y2 + C1[5]
+    # eq2_2 = C2[0]*x2**2 + C2[1]*x2*y2 + C2[2]*y2**2 + C2[3]*x2 + C2[4]*y2 + C2[5]
+
+    # eq1_3 = C1[0]*x3**2 + C1[1]*x3*y3 + C1[2]*y3**2 + C1[3]*x3 + C1[4]*y3 + C1[5]
+    # eq2_3 = C2[0]*x3**2 + C2[1]*x3*y3 + C2[2]*y3**2 + C2[3]*x3 + C2[4]*y3 + C2[5]
+
+    # eq1_4 = C1[0]*x4**2 + C1[1]*x4*y4 + C1[2]*y4**2 + C1[3]*x4 + C1[4]*y4 + C1[5]
+    # eq2_4 = C2[0]*x4**2 + C2[1]*x4*y4 + C2[2]*y4**2 + C2[3]*x4 + C2[4]*y4 + C2[5]
+
+    Cc1 = np.array([[C1[0],   C1[1]/2, C1[3]/2],
+                    [C1[1]/2, C1[2],   C1[4]/2],
+                    [C1[3]/2, C1[4]/2, C1[5]]])
+    
+    Cc2 = np.array([[C2[0],   C2[1]/2, C2[3]/2],
+                    [C2[1]/2, C2[2],   C2[4]/2],
+                    [C2[3]/2, C2[4]/2, C2[5]]])
+    
+    # p1 = np.array([x1,y1,1]).reshape((-1,1))
+    # p2 = np.array([x2,y2,1]).reshape((-1,1))
+    # p3 = np.array([x3,y3,1]).reshape((-1,1))
+    # p4 = np.array([x4,y4,1]).reshape((-1,1))
+
+    II = np.hstack([sol[3],1]).reshape((-1,1))
+    JJ = np.hstack([sol[2],1]).reshape((-1,1))
+    Cinf = II @ JJ.T + JJ @ II.T
+    U,S,Vh = np.linalg.svd(Cinf)
+
+    rec_circle = U @ Cc1 @ U.T
 
 ########################## PLOT ###########################
 
@@ -253,6 +299,21 @@ def main():
     ax2.set_xlim(0, 2)
     ax2.set_ylim(-1, 1)
     ax2.set_zlim(0, 1)
+
+
+    # Plot reconstructed circle
+    fig3 = plt.figure(figsize=(6,6))
+    ax3 = fig3.add_subplot(111, aspect='equal', adjustable='box')
+    # ax.set_aspect('equal')
+    ax3.set_aspect(1.0/ax3.get_data_ratio(), adjustable='box')
+    plot_conic_matrix_ellipse(rec_circle, ax3, "xkcd:blue", label="")
+    ax3.set_title("Reconstructed circle")
+    ax3.set_xlabel("X")
+    ax3.set_ylabel("Y")
+    ax3.legend()
+    ax3.set_ylim((-0.5, 0.5))
+    ax3.set_xlim((-0.5, 0.5))
+    ax3.grid(True)
 
     plt.show()
 
