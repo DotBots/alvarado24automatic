@@ -19,3 +19,23 @@ print(f"K @ K.T: {kkt}, shape = {kkt.shape}")
 print(f"K.T @ v: {ktv}, shape = {ktv.shape}")
 print(f"v.T @ K: {vtk}, shape = {vtk.shape}")
 
+
+Ha = sp.Matrix([[a,  b, 0],
+                [0, 1/a, 0],
+                [0, 0, 1]])
+
+Hp = sp.Matrix([[1,   0,  0],
+                [0,   1,  0],
+                [v1, v2,  1]])
+
+Cinf = sp.Matrix([[1,   0,  0],
+                  [0,   1,  0],
+                  [0,   0,  0]])
+
+
+Cinf_dual = (Hp@Ha) @ Cinf @ (Hp@Ha).T
+
+# pprint(Cinf_dual)
+pprint(Hp@Ha)
+
+print(f"K.T @ v @ K.T @ v: {v.T @ K @ K.T @ v}")

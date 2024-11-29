@@ -18,6 +18,58 @@ lh_t = np.array([0,0,1]) # Origin, z = 1m
 lh_R, _ = cv2.Rodrigues(np.array([0, np.pi/4, 0 ])) # pointing towards X-axis, elevation angle 45
 # lh_R, _ = cv2.Rodrigues(np.array([0, 0., 0 ])) # pointing towards X-axis, elevation angle 45
 
+# Debug grid
+grid_p1 = np.array([# Horizontal Line
+                    [0, -1.0],
+                    [0, -0.75],
+                    [0, -0.5],
+                    [0, -0.25],
+                    [0, 0],
+                    [0, 0.25],
+                    [0, 0.5],
+                    [0, 0.75],
+                    [0, 1.0],
+                    # Vertical Lines
+                    [ 0, -3],
+                    [ 0.25, -3],
+                    [ 0.5, -3],
+                    [ 0.75, -3],
+                    [ 1.0, -3],      
+                    [ 1.25, -3],
+                    [ 1.5, -3],
+                    [ 1.75, -3],              
+                    [ 2.0, -3],      
+                    [ 2.25, -3],
+                    [ 2.5, -3],
+                    [ 2.75, -3],
+                    # Diagonal lines
+                    # [ ]              
+                    ])
+
+grid_p2 = np.array([# Horizontal Line
+                    [+6, -1.0],
+                    [+6, -0.75],
+                    [+6, -0.5],
+                    [+6, -0.25],
+                    [+6, 0],
+                    [+6, 0.25],
+                    [+6, 0.5],
+                    [+6, 0.75],
+                    [+6, 1.0],
+                    # Vertical Lines
+                    [ 0, +3],
+                    [ 0.25, +3],
+                    [ 0.5, +3],
+                    [ 0.75, +3],
+                    [ 1.0, +3],      
+                    [ 1.25, +3],
+                    [ 1.5, +3],
+                    [ 1.75, +3],              
+                    [ 2.0, +3],      
+                    [ 2.25, +3],
+                    [ 2.5, +3],
+                    [ 2.75, +3],              
+                    ])
 ######################## FUNCTION ###########################
 
 # 1. Define a 3D Circle in space. Defaults to 10cm diameter circle on the X-Y plane, centered at (0,0,0),  with 100 samples
@@ -49,6 +101,14 @@ def add_noise(points, noise_std):
 
 # 4. Project 3D points onto the 2D image plane using the pinhole camera model
 def project_points_pinhole(points, camera_t, camera_R):
+
+    # If the points are, 2D, add a third dimension
+    if points.shape[1] == 2:
+        z = np.zeros((points.shape[0],1))
+        points = np.hstack((points, z))
+
+    assert (points.shape[1] == 3), f" points should be (N,3), not {points.shape}"
+
     # Translate and Rotation points to camera coordinates
     rot_pts = camera_R.T @ (points - camera_t).T
     
@@ -161,6 +221,8 @@ def extract_ellipse_params(A, B, C, D, E, F):
 
     # # Eigenvalue decomposition to find the axis lengths and rotation angle
     eigenvalues, eigenvectors = np.linalg.eig(conic_matrix)
+    eigenvalues = np.real_if_close(eigenvalues)
+    eigenvectors = np.real_if_close(eigenvectors)
     
     # Rotation angle is the angle of the eigenvector associated with the largest eigenvalue
     angle = np.degrees(np.arctan2(eigenvectors[1, 0], eigenvectors[0, 0]))
@@ -196,11 +258,14 @@ def plot_conic_matrix_ellipse(conic_params, ax, color, label=""):
     
     ax.add_patch(ellipse)
 
+def plot_grid(p1 ,p2 ,ax, color):
+    for i in range(p1.shape[0]):
+        ax.plot([p1[i,0], p2[i,0]],[p1[i,1], p2[i,1]], '--', color=color)
+
 ########################## MAIN ###########################
 
 # 5. Main function to generate the projection
 def main():
-
     
     # Generate the 3D circle points
     circle_1 = generate_circle_3d(radius, dotbot_1, samples)
@@ -252,17 +317,23 @@ def main():
                     [C2[1]/2, C2[2],   C2[4]/2],
                     [C2[3]/2, C2[4]/2, C2[5]]])
     
-    # p1 = np.array([x1,y1,1]).reshape((-1,1))
-    # p2 = np.array([x2,y2,1]).reshape((-1,1))
-    # p3 = np.array([x3,y3,1]).reshape((-1,1))
-    # p4 = np.array([x4,y4,1]).reshape((-1,1))
+    p1 = np.array([x1,y1,1]).reshape((-1,1))
+    p2 = np.array([x2,y2,1]).reshape((-1,1))
+    p3 = np.array([x3,y3,1]).reshape((-1,1))
+    p4 = np.array([x4,y4,1]).reshape((-1,1))
 
-    II = np.hstack([sol[3],1]).reshape((-1,1))
-    JJ = np.hstack([sol[2],1]).reshape((-1,1))
+    II = np.hstack([sol[1],1]).reshape((-1,1))
+    JJ = np.hstack([sol[0],1]).reshape((-1,1))
+
+    # line at infinity
+    linf = np.cross(II.reshape((-1,)), JJ.reshape((-1,))).reshape((-1,1))
+
+
     Cinf = II @ JJ.T + JJ @ II.T
     U,S,Vh = np.linalg.svd(Cinf)
+    Uinv = U.T
 
-    rec_circle = U @ Cc1 @ U.T
+    rec_circle = Uinv @ Cc1 @ Uinv.T
 
 ########################## PLOT ###########################
 
@@ -271,16 +342,22 @@ def main():
     ax = fig.add_subplot(111, aspect='equal', adjustable='box')
     # ax.set_aspect('equal')
     ax.set_aspect(1.0/ax.get_data_ratio(), adjustable='box')
+    # Plot debug grid
+    proj_grid_p1 = project_points_pinhole(grid_p1, lh_t, lh_R)
+    proj_grid_p2 = project_points_pinhole(grid_p2, lh_t, lh_R)
+    plot_grid(proj_grid_p1, proj_grid_p2 ,ax, "xkcd:gray")
     ax.scatter(proj_points_1[:,0], proj_points_1[:,1], c='r', label='points 1')
-    ax.scatter(proj_points_2[:,0], proj_points_2[:,1], c='r', label='points 2')
+    ax.scatter(proj_points_2[:,0], proj_points_2[:,1], c='g', label='points 2')
     plot_conic_matrix_ellipse(C1, ax, "xkcd:blue", label="")
     plot_conic_matrix_ellipse(C2, ax, "xkcd:blue", label="")
     ax.set_title("Circle viewed through a Pinhole Camera with Orientation (Projected Ellipse)")
     ax.set_xlabel("X")
     ax.set_ylabel("Y")
     ax.legend()
+    # ax.set_xlim([-0.7,0.7])
+    # ax.set_ylim([-0.3,0.3])
     ax.set_ylim(ax.get_xlim())
-    ax.grid(True)
+    # ax.grid(True)
 
     # Plot 3D scene
     fig2 = plt.figure()
@@ -288,7 +365,6 @@ def main():
     ax2.set_aspect('equal')
     ax2.set_box_aspect([1,1,1]) # IMPORTANT - this is the new, key line
     ax2.set_proj_type('ortho')
-
     # Plot the lighthouse orientation
     arrow = np.array([1,0,0]).reshape((-1,1))
     ax2.quiver(lh_t[0],lh_t[1],lh_t[2], (lh_R @ arrow)[0], (lh_R @ arrow)[1], (lh_R @ arrow)[2], length=0.4, color='xkcd:red')
@@ -306,13 +382,15 @@ def main():
     ax3 = fig3.add_subplot(111, aspect='equal', adjustable='box')
     # ax.set_aspect('equal')
     ax3.set_aspect(1.0/ax3.get_data_ratio(), adjustable='box')
-    plot_conic_matrix_ellipse(rec_circle, ax3, "xkcd:blue", label="")
-    ax3.set_title("Reconstructed circle")
+    plot_grid(grid_p1, grid_p2 ,ax3, "xkcd:gray")
+    ax3.scatter(circle_1[:,0],circle_1[:,1], color='xkcd:red', label='dotbot 1', s=50)
+    ax3.scatter(circle_2[:,0],circle_2[:,1], color='xkcd:green', label='dotbot 2', s=50)
+    ax3.set_title("Original circle")
     ax3.set_xlabel("X")
     ax3.set_ylabel("Y")
     ax3.legend()
-    ax3.set_ylim((-0.5, 0.5))
-    ax3.set_xlim((-0.5, 0.5))
+    ax3.set_ylim((-1.5, 1.5))
+    ax3.set_xlim((-1.5, 1.5))
     ax3.grid(True)
 
     plt.show()
