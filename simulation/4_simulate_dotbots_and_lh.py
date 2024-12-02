@@ -42,8 +42,21 @@ grid_p1 = np.array([# Horizontal Line
                     [ 2.25, -3],
                     [ 2.5, -3],
                     [ 2.75, -3],
+                    [ 3.0, -3],      
+                    [ 3.25, -3],
+                    [ 3.5, -3],
+                    [ 3.75, -3],
+                    [ 10, -3],
                     # Diagonal lines
-                    # [ ]              
+                    [ 0, 1],
+                    [ 0, 0.5],
+                    [ 0, 0],
+                    [ 0, -0.5],
+                    [ 0, -1],              
+                    [ 0.5, -1],              
+                    [ 1, -1],              
+                    [ 1.5, -1],              
+                    [ 2, -1],              
                     ])
 
 grid_p2 = np.array([# Horizontal Line
@@ -68,8 +81,38 @@ grid_p2 = np.array([# Horizontal Line
                     [ 2.0, +3],      
                     [ 2.25, +3],
                     [ 2.5, +3],
-                    [ 2.75, +3],              
+                    [ 2.75, +3],  
+                    [ 3.0, +3],      
+                    [ 3.25, +3],
+                    [ 3.5, +3],
+                    [ 3.75, +3],
+                    [ 10, +3],
+                    # Diagonal lines
+                    [ 3, 4],
+                    [ 3, 3.5],
+                    [ 3, 3],
+                    [ 3, 2.5],
+                    [ 3, 2],              
+                    [ 3.5, 2],              
+                    [ 4, 2],              
+                    [ 4.5, 2],              
+                    [ 5, 2],        
                     ])
+
+calib_points = {"start": np.array([
+                    [0, -1.0],          # Line 1  - parallel 1 - start
+                    [0, 1.0],           # Line 2  - parallel 1 - start
+                    [ 0, 1],            # Line 3  - parallel 2 - start
+                    [ 2, -1], ]),       # Line 4  - parallel 2 - start
+                "end": np.array([
+                    [+6, -1.0],         # Line 1  - parallel 1 - end
+                    [+6, 1.0],          # Line 2  - parallel 1 - end
+                    [ 3, 4],            # Line 3  - parallel 2 - end
+                    [ 5, 2],  ]),       # Line 4  - parallel 2 - end
+                    }
+
+proj_calib_points = {}
+
 ######################## FUNCTION ###########################
 
 # 1. Define a 3D Circle in space. Defaults to 10cm diameter circle on the X-Y plane, centered at (0,0,0),  with 100 samples
@@ -101,6 +144,10 @@ def add_noise(points, noise_std):
 
 # 4. Project 3D points onto the 2D image plane using the pinhole camera model
 def project_points_pinhole(points, camera_t, camera_R):
+
+    # If the point only has a single dimension, add another
+    if len(points.shape) == 1:
+        points = points.reshape((1,-1))
 
     # If the points are, 2D, add a third dimension
     if points.shape[1] == 2:
@@ -196,6 +243,32 @@ def intersect_ellipses(C1, C2):
 
     return numeric_solution, numeric_solution_w 
 
+# 7. Calculate the line at infinity from the calibration grid
+def compute_line_at_infinity(proj_calib_points):
+    
+    # make the points homogeneous
+    ones = np.ones((proj_calib_points["start"].shape[0],1))
+    proj_calib_points["start"] = np.hstack((proj_calib_points["start"], ones))
+    proj_calib_points["end"] = np.hstack((proj_calib_points["end"], ones))
+
+    # Cross product of the start and end point of the line to get the line homogeneous equation.
+    l1 = np.cross(proj_calib_points["start"][0], proj_calib_points["end"][0])
+    l2 = np.cross(proj_calib_points["start"][1], proj_calib_points["end"][1])
+    l3 = np.cross(proj_calib_points["start"][2], proj_calib_points["end"][2])
+    l4 = np.cross(proj_calib_points["start"][3], proj_calib_points["end"][3])
+
+    # Cross product the lines to get the homogeneous points at the image of the line at infinity
+    p1_inf = np.cross(l1, l2)
+    p2_inf = np.cross(l3, l4)
+
+    # Cross product of the infinite points to get the image of the line at infinite.
+    linf = np.cross(p1_inf, p2_inf)
+
+    return linf
+
+def apply_point_homography(points, H):
+    pass
+
 ######################## PLOTTING FUNCTION ###########################
 
 def extract_ellipse_params(A, B, C, D, E, F):
@@ -278,6 +351,15 @@ def main():
     # Project the noisy circle points through the pinhole camera
     proj_points_1 = project_points_pinhole(circle_1, lh_t, lh_R)
     proj_points_2 = project_points_pinhole(circle_2, lh_t, lh_R)
+    proj_dotbot_1 = project_points_pinhole(dotbot_1, lh_t, lh_R)
+    proj_dotbot_2 = project_points_pinhole(dotbot_2, lh_t, lh_R)
+    proj_grid_p1 = project_points_pinhole(grid_p1, lh_t, lh_R)
+    proj_grid_p2 = project_points_pinhole(grid_p2, lh_t, lh_R)
+
+    # Project the calibration points, and comupte the line at infinity
+    proj_calib_points["start"] = project_points_pinhole(calib_points["start"], lh_t, lh_R)
+    proj_calib_points["end"] = project_points_pinhole(calib_points["end"], lh_t, lh_R)
+    linf_orig = compute_line_at_infinity(proj_calib_points)
     
     # Turn the data into (N,2) shape if it is in (2,) shape
     if len(proj_points_1.shape) == 1: proj_points_1 = proj_points_1[np.newaxis,:]
@@ -297,43 +379,38 @@ def main():
     x3, y3 = sol[2]
     x4, y4 = sol[3]
 
-    # eq1_1 = C1[0]*x1**2 + C1[1]*x1*y1 + C1[2]*y1**2 + C1[3]*x1 + C1[4]*y1 + C1[5]
-    # eq2_1 = C2[0]*x1**2 + C2[1]*x1*y1 + C2[2]*y1**2 + C2[3]*x1 + C2[4]*y1 + C2[5]
-
-    # eq1_2 = C1[0]*x2**2 + C1[1]*x2*y2 + C1[2]*y2**2 + C1[3]*x2 + C1[4]*y2 + C1[5]
-    # eq2_2 = C2[0]*x2**2 + C2[1]*x2*y2 + C2[2]*y2**2 + C2[3]*x2 + C2[4]*y2 + C2[5]
-
-    # eq1_3 = C1[0]*x3**2 + C1[1]*x3*y3 + C1[2]*y3**2 + C1[3]*x3 + C1[4]*y3 + C1[5]
-    # eq2_3 = C2[0]*x3**2 + C2[1]*x3*y3 + C2[2]*y3**2 + C2[3]*x3 + C2[4]*y3 + C2[5]
-
-    # eq1_4 = C1[0]*x4**2 + C1[1]*x4*y4 + C1[2]*y4**2 + C1[3]*x4 + C1[4]*y4 + C1[5]
-    # eq2_4 = C2[0]*x4**2 + C2[1]*x4*y4 + C2[2]*y4**2 + C2[3]*x4 + C2[4]*y4 + C2[5]
-
-    Cc1 = np.array([[C1[0],   C1[1]/2, C1[3]/2],
-                    [C1[1]/2, C1[2],   C1[4]/2],
-                    [C1[3]/2, C1[4]/2, C1[5]]])
+    # Cc1 = np.array([[C1[0],   C1[1]/2, C1[3]/2],
+    #                 [C1[1]/2, C1[2],   C1[4]/2],
+    #                 [C1[3]/2, C1[4]/2, C1[5]]])
     
-    Cc2 = np.array([[C2[0],   C2[1]/2, C2[3]/2],
-                    [C2[1]/2, C2[2],   C2[4]/2],
-                    [C2[3]/2, C2[4]/2, C2[5]]])
+    # Cc2 = np.array([[C2[0],   C2[1]/2, C2[3]/2],
+    #                 [C2[1]/2, C2[2],   C2[4]/2],
+    #                 [C2[3]/2, C2[4]/2, C2[5]]])
     
     p1 = np.array([x1,y1,1]).reshape((-1,1))
     p2 = np.array([x2,y2,1]).reshape((-1,1))
     p3 = np.array([x3,y3,1]).reshape((-1,1))
     p4 = np.array([x4,y4,1]).reshape((-1,1))
 
-    II = np.hstack([sol[1],1]).reshape((-1,1))
-    JJ = np.hstack([sol[0],1]).reshape((-1,1))
+    II = p3
+    JJ = p4
 
     # line at infinity
     linf = np.cross(II.reshape((-1,)), JJ.reshape((-1,))).reshape((-1,1))
-
+    linf = linf/linf[2] # normalize by the independent element
 
     Cinf = II @ JJ.T + JJ @ II.T
     U,S,Vh = np.linalg.svd(Cinf)
     Uinv = U.T
 
-    rec_circle = Uinv @ Cc1 @ Uinv.T
+    ###################### Affine rectification ##############
+
+    Hp_prime_inv = 1/np.array([[1, 0, 0],
+                         [0, 1, 0],
+                         [-linf[0]/linf[2], -linf[1]/linf[2], 1/linf[2]]])
+    
+
+
 
 ########################## PLOT ###########################
 
@@ -343,11 +420,11 @@ def main():
     # ax.set_aspect('equal')
     ax.set_aspect(1.0/ax.get_data_ratio(), adjustable='box')
     # Plot debug grid
-    proj_grid_p1 = project_points_pinhole(grid_p1, lh_t, lh_R)
-    proj_grid_p2 = project_points_pinhole(grid_p2, lh_t, lh_R)
     plot_grid(proj_grid_p1, proj_grid_p2 ,ax, "xkcd:gray")
     ax.scatter(proj_points_1[:,0], proj_points_1[:,1], c='r', label='points 1')
     ax.scatter(proj_points_2[:,0], proj_points_2[:,1], c='g', label='points 2')
+    ax.scatter(proj_dotbot_1[:,0], proj_dotbot_1[:,1], c='r')
+    ax.scatter(proj_dotbot_2[:,0], proj_dotbot_2[:,1], c='g')
     plot_conic_matrix_ellipse(C1, ax, "xkcd:blue", label="")
     plot_conic_matrix_ellipse(C2, ax, "xkcd:blue", label="")
     ax.set_title("Circle viewed through a Pinhole Camera with Orientation (Projected Ellipse)")
@@ -368,8 +445,8 @@ def main():
     # Plot the lighthouse orientation
     arrow = np.array([1,0,0]).reshape((-1,1))
     ax2.quiver(lh_t[0],lh_t[1],lh_t[2], (lh_R @ arrow)[0], (lh_R @ arrow)[1], (lh_R @ arrow)[2], length=0.4, color='xkcd:red')
-    ax2.scatter(dotbot_1[0],dotbot_1[1],dotbot_1[2], color='xkcd:blue', label='dotbot 1', s=50)
-    ax2.scatter(circle_1[:,0],circle_1[:,1],circle_1[:,2], color='xkcd:blue', label='dotbot 1', s=50)
+    ax2.scatter(dotbot_1[0],dotbot_1[1],dotbot_1[2], color='xkcd:red', label='dotbot 1', s=50)
+    ax2.scatter(circle_1[:,0],circle_1[:,1],circle_1[:,2], color='xkcd:red', label='dotbot 1', s=50)
     ax2.scatter(dotbot_2[0],dotbot_2[1],dotbot_2[2], color='xkcd:green', label='dotbot 2', s=50)
     ax2.scatter(circle_2[:,0],circle_2[:,1],circle_2[:,2], color='xkcd:green', label='dotbot d', s=50)
     ax2.set_xlim(0, 2)
