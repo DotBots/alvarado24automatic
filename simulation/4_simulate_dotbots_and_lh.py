@@ -1,5 +1,6 @@
 import numpy as np
-
+import matplotlib
+matplotlib.use('TKAgg')
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 import sympy as sp
@@ -267,7 +268,22 @@ def compute_line_at_infinity(proj_calib_points):
     return linf
 
 def apply_point_homography(points, H):
-    pass
+
+    # If the point only has a single dimension, add another
+    if len(points.shape) == 1:
+        points = points.reshape((1,-1))
+
+    # If the points are, 2D, add a third dimension
+    if points.shape[1] == 2:
+        ones = np.ones((points.shape[0],1))
+        points = np.hstack((points, ones))
+
+    # Transform the points trough the Homography
+    h_points = (H @ points.T).T
+    # Normalize the homogeneous points
+    h_points = h_points/h_points[:,2,np.newaxis]
+
+    return h_points
 
 ######################## PLOTTING FUNCTION ###########################
 
@@ -349,8 +365,8 @@ def main():
     # noisy_circle_3d = add_noise(circle_3d, noise_std)
     
     # Project the noisy circle points through the pinhole camera
-    proj_points_1 = project_points_pinhole(circle_1, lh_t, lh_R)
-    proj_points_2 = project_points_pinhole(circle_2, lh_t, lh_R)
+    proj_circle_1 = project_points_pinhole(circle_1, lh_t, lh_R)
+    proj_circle_2 = project_points_pinhole(circle_2, lh_t, lh_R)
     proj_dotbot_1 = project_points_pinhole(dotbot_1, lh_t, lh_R)
     proj_dotbot_2 = project_points_pinhole(dotbot_2, lh_t, lh_R)
     proj_grid_p1 = project_points_pinhole(grid_p1, lh_t, lh_R)
@@ -362,12 +378,12 @@ def main():
     linf_orig = compute_line_at_infinity(proj_calib_points)
     
     # Turn the data into (N,2) shape if it is in (2,) shape
-    if len(proj_points_1.shape) == 1: proj_points_1 = proj_points_1[np.newaxis,:]
-    if len(proj_points_2.shape) == 1: proj_points_2 = proj_points_2[np.newaxis,:]
+    if len(proj_circle_1.shape) == 1: proj_circle_1 = proj_circle_1[np.newaxis,:]
+    if len(proj_circle_2.shape) == 1: proj_circle_2 = proj_circle_2[np.newaxis,:]
 
     # Get the conic equation
-    C1 = fit_ellipse(proj_points_1)
-    C2 = fit_ellipse(proj_points_2)
+    C1 = fit_ellipse(proj_circle_1)
+    C2 = fit_ellipse(proj_circle_2)
 
     # Get the intersection points
     sol, sol_w = intersect_ellipses(C1, C2)
@@ -376,8 +392,8 @@ def main():
     #evaluate the solutions
     x1, y1 = sol[0]
     x2, y2 = sol[1]
-    x3, y3 = sol[2]
-    x4, y4 = sol[3]
+    # x3, y3 = sol[2]
+    # x4, y4 = sol[3]
 
     # Cc1 = np.array([[C1[0],   C1[1]/2, C1[3]/2],
     #                 [C1[1]/2, C1[2],   C1[4]/2],
@@ -389,15 +405,18 @@ def main():
     
     p1 = np.array([x1,y1,1]).reshape((-1,1))
     p2 = np.array([x2,y2,1]).reshape((-1,1))
-    p3 = np.array([x3,y3,1]).reshape((-1,1))
-    p4 = np.array([x4,y4,1]).reshape((-1,1))
+    # p3 = np.array([x3,y3,1]).reshape((-1,1))
+    # p4 = np.array([x4,y4,1]).reshape((-1,1))
 
-    II = p3
-    JJ = p4
+    # II = p3
+    # JJ = p4
+    II = p1
+    JJ = p2
 
     # line at infinity
     linf = np.cross(II.reshape((-1,)), JJ.reshape((-1,))).reshape((-1,1))
     linf = linf/linf[2] # normalize by the independent element
+    linf = np.real_if_close(linf)
 
     Cinf = II @ JJ.T + JJ @ II.T
     U,S,Vh = np.linalg.svd(Cinf)
@@ -405,11 +424,14 @@ def main():
 
     ###################### Affine rectification ##############
 
-    Hp_prime_inv = 1/np.array([[1, 0, 0],
+    Hp_prime_inv = np.linalg.inv(np.array([[1, 0, 0],
                          [0, 1, 0],
-                         [-linf[0]/linf[2], -linf[1]/linf[2], 1/linf[2]]])
+                         [-linf[0][0]/linf[2][0], -linf[1][0]/linf[2][0], 1/linf[2][0]]]))
     
-
+    affine_grid_p1 = apply_point_homography(proj_grid_p1, Hp_prime_inv)
+    affine_grid_p2 = apply_point_homography(proj_grid_p2, Hp_prime_inv)
+    affine_circle_1 = apply_point_homography(proj_circle_1, Hp_prime_inv)
+    affine_circle_2 = apply_point_homography(proj_circle_2, Hp_prime_inv)
 
 
 ########################## PLOT ###########################
@@ -421,8 +443,8 @@ def main():
     ax.set_aspect(1.0/ax.get_data_ratio(), adjustable='box')
     # Plot debug grid
     plot_grid(proj_grid_p1, proj_grid_p2 ,ax, "xkcd:gray")
-    ax.scatter(proj_points_1[:,0], proj_points_1[:,1], c='r', label='points 1')
-    ax.scatter(proj_points_2[:,0], proj_points_2[:,1], c='g', label='points 2')
+    ax.scatter(proj_circle_1[:,0], proj_circle_1[:,1], c='r', label='points 1')
+    ax.scatter(proj_circle_2[:,0], proj_circle_2[:,1], c='g', label='points 2')
     ax.scatter(proj_dotbot_1[:,0], proj_dotbot_1[:,1], c='r')
     ax.scatter(proj_dotbot_2[:,0], proj_dotbot_2[:,1], c='g')
     plot_conic_matrix_ellipse(C1, ax, "xkcd:blue", label="")
@@ -469,6 +491,29 @@ def main():
     ax3.set_ylim((-1.5, 1.5))
     ax3.set_xlim((-1.5, 1.5))
     ax3.grid(True)
+
+
+    # Plot Affine correction
+    fig4 = plt.figure(figsize=(6,6))
+    ax4 = fig4.add_subplot(111, aspect='equal', adjustable='box')
+    # ax4.set_aspect('equal')
+    ax4.set_aspect(1.0/ax4.get_data_ratio(), adjustable='box')
+    # Plot debug grid
+    plot_grid(affine_grid_p1, affine_grid_p2 ,ax4, "xkcd:gray")
+    ax4.scatter(affine_circle_1[:,0], affine_circle_1[:,1], c='r', label='points 1')
+    ax4.scatter(affine_circle_2[:,0], affine_circle_2[:,1], c='g', label='points 2')
+    # ax4.scatter(proj_dotbot_1[:,0], proj_dotbot_1[:,1], c='r')
+    # ax4.scatter(proj_dotbot_2[:,0], proj_dotbot_2[:,1], c='g')
+    # plot_conic_matrix_ellipse(C1, ax4, "xkcd:blue", label="")
+    # plot_conic_matrix_ellipse(C2, ax4, "xkcd:blue", label="")
+    ax4.set_title("Circle viewed through a Pinhole Camera , Affine only distortion ")
+    ax4.set_xlabel("X")
+    ax4.set_ylabel("Y")
+    ax4.legend()
+    # ax4.set_xlim([-0.7,0.7])
+    # ax4.set_ylim([-0.3,0.3])
+    ax4.set_ylim(ax4.get_xlim())
+    # ax4.grid(True)
 
     plt.show()
 
