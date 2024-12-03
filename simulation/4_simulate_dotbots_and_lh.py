@@ -9,14 +9,14 @@ import cv2
 ####################### OPTIONS ############################
 # position of the circles
 dotbot_1 = np.array([1,0.3,0])  
-dotbot_2 = np.array([1,-0.3,0])
+dotbot_2 = np.array([1.25,-0.3,0])
 
 radius = 0.05 # 10cm, diameter
 samples = 100 # how many samples to use per circle
 
 # Pose of the LH
 lh_t = np.array([0,0,1]) # Origin, z = 1m 
-lh_R, _ = cv2.Rodrigues(np.array([0, np.pi/4, 0 ])) # pointing towards X-axis, elevation angle 45
+lh_R, _ = cv2.Rodrigues(np.array([0, np.pi/4, np.pi/16 ])) # pointing towards X-axis, elevation angle 45
 # lh_R, _ = cv2.Rodrigues(np.array([0, 0., 0 ])) # pointing towards X-axis, elevation angle 45
 
 # Debug grid
@@ -198,7 +198,7 @@ def intersect_ellipses(C1, C2):
     Ax^2 + Bxy + Cy^2 = 0
     """
 
-    x,y = sp.symbols('x y')
+    x,y = sp.symbols('x y',complex=True)
     # Standard form
     eq1 = C1[0]*x**2 + C1[1]*x*y + C1[2]*y**2 + C1[3]*x + C1[4]*y + C1[5]
     eq2 = C2[0]*x**2 + C2[1]*x*y + C2[2]*y**2 + C2[3]*x + C2[4]*y + C2[5]
@@ -420,19 +420,35 @@ def main():
 
     Cinf = II @ JJ.T + JJ @ II.T
     U,S,Vh = np.linalg.svd(Cinf)
-    Uinv = U.T
 
-    ###################### Affine rectification ##############
+    ###################### Projective -> Affine rectification ##############
 
     Hp_prime_inv = np.linalg.inv(np.array([[1, 0, 0],
                          [0, 1, 0],
                          [-linf[0][0]/linf[2][0], -linf[1][0]/linf[2][0], 1/linf[2][0]]]))
     
+    # Ground truth fo the line at infinity
+    # Hp_prime_inv_orig = np.linalg.inv(np.array([[1, 0, 0],
+    #                      [0, 1, 0],
+    #                      [-linf_orig[0]/linf_orig[2], -linf_orig[1]/linf_orig[2], 1/linf_orig[2]]]))
+    # Hp_prime_inv = Hp_prime_inv_orig
+
+
     affine_grid_p1 = apply_point_homography(proj_grid_p1, Hp_prime_inv)
     affine_grid_p2 = apply_point_homography(proj_grid_p2, Hp_prime_inv)
     affine_circle_1 = apply_point_homography(proj_circle_1, Hp_prime_inv)
     affine_circle_2 = apply_point_homography(proj_circle_2, Hp_prime_inv)
 
+
+    ###################### Affine -> Similarity rectification ##############
+
+    H_sim = np.real_if_close(U)
+    H_sim_inv = np.linalg.inv(H_sim)
+
+    similarity_grid_p1 = apply_point_homography(proj_grid_p1, H_sim_inv)
+    similarity_grid_p2 = apply_point_homography(proj_grid_p2, H_sim_inv)
+    similarity_circle_1 = apply_point_homography(proj_circle_1, H_sim_inv)
+    similarity_circle_2 = apply_point_homography(proj_circle_2, H_sim_inv)
 
 ########################## PLOT ###########################
 
@@ -493,7 +509,7 @@ def main():
     ax3.grid(True)
 
 
-    # Plot Affine correction
+    # Plot Projective to Affine correction
     fig4 = plt.figure(figsize=(6,6))
     ax4 = fig4.add_subplot(111, aspect='equal', adjustable='box')
     # ax4.set_aspect('equal')
@@ -514,6 +530,30 @@ def main():
     # ax4.set_ylim([-0.3,0.3])
     ax4.set_ylim(ax4.get_xlim())
     # ax4.grid(True)
+
+
+
+    # Plot Affine to Similarity correction
+    fig5 = plt.figure(figsize=(6,6))
+    ax5 = fig5.add_subplot(111, aspect='equal', adjustable='box')
+    # ax5.set_aspect('equal')
+    ax5.set_aspect(1.0/ax5.get_data_ratio(), adjustable='box')
+    # Plot debug grid
+    plot_grid(similarity_grid_p1, similarity_grid_p2 ,ax5, "xkcd:gray")
+    ax5.scatter(similarity_circle_1[:,0], similarity_circle_1[:,1], c='r', label='points 1')
+    ax5.scatter(similarity_circle_2[:,0], similarity_circle_2[:,1], c='g', label='points 2')
+    # ax5.scatter(proj_dotbot_1[:,0], proj_dotbot_1[:,1], c='r')
+    # ax5.scatter(proj_dotbot_2[:,0], proj_dotbot_2[:,1], c='g')
+    # plot_conic_matrix_ellipse(C1, ax5, "xkcd:blue", label="")
+    # plot_conic_matrix_ellipse(C2, ax5, "xkcd:blue", label="")
+    ax5.set_title("Circle viewed through a Pinhole Camera , Similarity only distortion ")
+    ax5.set_xlabel("X")
+    ax5.set_ylabel("Y")
+    ax5.legend()
+    # ax5.set_xlim([-0.7,0.7])
+    # ax5.set_ylim([-0.3,0.3])
+    ax5.set_ylim(ax5.get_xlim())
+    # ax5.grid(True)
 
     plt.show()
 
