@@ -8,7 +8,7 @@ import cv2
 
 ####################### OPTIONS ############################
 # position of the circles
-dotbot_1 = np.array([1,0.3,0])  
+dotbot_1 = np.array([0.9,0.3,0])  
 dotbot_2 = np.array([1.25,-0.3,0])
 
 radius = 0.05 # 10cm, diameter
@@ -16,7 +16,7 @@ samples = 100 # how many samples to use per circle
 
 # Pose of the LH
 lh_t = np.array([0,0,1]) # Origin, z = 1m 
-lh_R, _ = cv2.Rodrigues(np.array([0, np.pi/4, np.pi/16 ])) # pointing towards X-axis, elevation angle 45
+lh_R, _ = cv2.Rodrigues(np.array([-np.pi/16, np.pi/4, np.pi/16 ])) # pointing towards X-axis, elevation angle 45
 # lh_R, _ = cv2.Rodrigues(np.array([0, 0., 0 ])) # pointing towards X-axis, elevation angle 45
 
 # Debug grid
@@ -163,7 +163,7 @@ def project_points_pinhole(points, camera_t, camera_R):
     elevation = np.arctan2( rot_pts[2], np.sqrt(rot_pts[0]**2 + rot_pts[1]**2))
     azimuth = np.arctan2(rot_pts[1], rot_pts[0])
 
-    proj_pts = np.array([np.tan(azimuth),       # horizontal pixel  
+    proj_pts = np.array([-np.tan(azimuth),       # horizontal pixel  
                              np.tan(elevation) * 1/np.cos(azimuth)]).T  # vertical   pixel 
     
 
@@ -197,6 +197,9 @@ def intersect_ellipses(C1, C2):
     Ax^2 + Bxy + Cy^2 + Dxw + Eyw + Fw^2 = 0    ; thus
     Ax^2 + Bxy + Cy^2 = 0
     """
+
+    ## starting seeds
+    seed_values = [100+100j, 100-100j, -100+100j, -100-100j]
 
     x,y = sp.symbols('x y',complex=True)
     # Standard form
@@ -244,6 +247,109 @@ def intersect_ellipses(C1, C2):
 
     return numeric_solution, numeric_solution_w 
 
+def intersect_ellipses_numerical(C1, C2):
+    """
+    This function returns all imaginary intersection points of the Conic sections C1 and C2. In their standard form:
+    Ax^2 + Bxy + Cy^2 + Dx + Ey + F = 0
+    And in the homogenous form at infinite, where W=0
+    Ax^2 + Bxy + Cy^2 + Dxw + Eyw + Fw^2 = 0    ; thus
+    Ax^2 + Bxy + Cy^2 = 0
+    """
+
+    ## starting seeds
+    seed_values = [1+1j, 1-1j, -1+1j, -1-1j]
+
+    solutions = []
+    solutions_w = []
+    # Iterate over all the possible startng value
+    for x0 in seed_values:
+        for y0 in seed_values:
+            x,y = sp.symbols('x y',complex=True)
+            # Standard form
+            eq1 = C1[0]*x**2 + C1[1]*x*y + C1[2]*y**2 + C1[3]*x + C1[4]*y + C1[5]
+            eq2 = C2[0]*x**2 + C2[1]*x*y + C2[2]*y**2 + C2[3]*x + C2[4]*y + C2[5]
+
+            # Homogeneous w=0 infinite equations
+            eq1_w = C1[0]*x**2 + C1[1]*x*y + C1[2]*y**2
+            eq2_w = C2[0]*x**2 + C2[1]*x*y + C2[2]*y**2 
+
+            found_flag = False
+            found_flag_w = False
+            try:
+                local_solutions = sp.nsolve([eq1, eq2], (x,y), (x0,y0))
+                found_flag = True
+            except:
+                pass    
+
+            try:
+                local_solutions_w = sp.nsolve([eq1_w, eq2_w], (x,y), (x0,y0))
+                found_flag_w = True
+            except:
+                pass
+
+            if found_flag:
+                # Convert solution to numpy
+                numeric_solution = np.array(local_solutions, dtype=np.complex128)
+                # Go one by one and get rid of floating point errors (real_if_close, close_to_zero)
+                for i in range(numeric_solution.shape[0]):
+                    for j in range(numeric_solution.shape[1]):
+
+                        # Check if number is real
+                        numeric_solution[i][j] = np.real_if_close(numeric_solution[i][j])
+
+                        # Check if real part is zero
+                        if np.isclose(np.real(numeric_solution[i][j]),0): numeric_solution[i][j] = 1j * np.imag(numeric_solution[i][j]) 
+
+                        # Check if number is zero
+                        if np.isclose(np.real(numeric_solution[i][j]),0) and np.isclose(np.imag(numeric_solution[i][j]),0): numeric_solution[i][j] = 0
+        
+                # Add to the list of solutions if it's not there. (also add the complex conjugate, because it will appear there sooner or later)
+                # Standard
+                if not np.any(numeric_solution == solutions):
+                    solutions.append(numeric_solution)
+                # Conjugate
+                if not np.any(np.conjugate(numeric_solution) == solutions):
+                    solutions.append(np.conjugate(numeric_solution))
+
+            if found_flag_w:
+                # Convert solution to numpy
+                numeric_solution_w = np.array(local_solutions_w, dtype=np.complex128)
+                # Same as above, but for the homogeneous w=0 case
+                for i in range(numeric_solution_w.shape[0]):
+                    for j in range(numeric_solution_w.shape[1]):
+
+                        # Check if number is real
+                        numeric_solution_w[i][j] = np.real_if_close(numeric_solution_w[i][j])
+
+                        # Check if real part is zero
+                        if np.isclose(np.real(numeric_solution_w[i][j]),0): numeric_solution_w[i][j] = 1j * np.imag(numeric_solution_w[i][j]) 
+
+                        # Check if number is zero
+                        if np.isclose(np.real(numeric_solution_w[i][j]),0) and np.isclose(np.imag(numeric_solution_w[i][j]),0): numeric_solution_w[i][j] = 0
+
+                # Add to the list of solutions if it's not there. (also add the complex conjugate, because it will appear there sooner or later)
+                # Standard
+                if not np.any(numeric_solution_w == solutions_w):
+                    solutions_w.append(numeric_solution_w)
+                # Conjugate
+                if not np.any(np.conjugate(numeric_solution_w) == solutions_w):
+                    solutions_w.append(np.conjugate(numeric_solution_w))
+
+    # Split the results into complex conjugates pairs
+    sorted_results = []
+    # Normal results (w=1 equation)
+    if len(solutions) > 0:
+        for sol in solutions:
+            if not np.any(sol == sorted_results):
+                sorted_results.append([sol, np.conjugate(sol)])
+    # Inifite results (w=0, for when H is an affinity)
+    if len(solutions_w) > 0:
+        for sol in solutions_w:
+            if not np.any(sol == sorted_results):
+                sorted_results.append([sol, np.conjugate(sol)])    
+
+    return sorted_results
+
 # 7. Calculate the line at infinity from the calibration grid
 def compute_line_at_infinity(proj_calib_points):
     
@@ -285,6 +391,81 @@ def apply_point_homography(points, H):
 
     return h_points
 
+def apply_conic_homography(conic, H):
+    # Re arm the conic equation into its matrix form
+    if len(conic) == 6:
+        A, B, C, D, E, F = conic
+    if conic.shape == (3,3):
+        A = conic[0,0]
+        B = conic[1,0]*2
+        C = conic[1,1]
+        D = conic[0,2]*2
+        E = conic[1,2]*2
+        F = conic[2,2]
+
+    C_orig = np.array([[A,   B/2, D/2],
+                  [B/2, C,   E/2],
+                  [D/2, E/2, F]])
+    
+    # invert the Homography matrix
+    Hinv = np.linalg.inv(H)
+
+    # Perform Homography transformation
+    C_homo = Hinv.T @ C_orig @ Hinv
+
+    # Extract the parameters of the new conic
+    A_h = C_homo[0,0]
+    B_h = C_homo[1,0] * 2
+    C_h = C_homo[1,1]
+    D_h = C_homo[0,2] * 2
+    E_h = C_homo[1,2] * 2
+    F_h = C_homo[2,2]
+
+    # Return the new conic parameters
+    return A_h, B_h, C_h, D_h, E_h, F_h
+
+# 8. Compute Correcting Homography 
+def compute_correcting_homography(intersections, conics):
+
+    # candidate solutions, we will store the possible solutions and return the best one.
+    candidate_solutions = []
+    candidate_error = []
+
+    for sol in intersections:
+        # Extract the image of the circular points
+        II = np.array([sol[0][0][0],sol[0][1][0],1]).reshape((-1,1))
+        JJ = np.array([sol[1][0][0],sol[1][1][0],1]).reshape((-1,1))
+        # Calculate the Line at infinity
+        linf = np.cross(II.reshape((-1,)), JJ.reshape((-1,))).reshape((-1,1))
+        linf = linf/linf[2] # normalize by the independent element
+        linf = np.real_if_close(linf)
+        # Calculate the Dual Conic
+        Cinf = II @ JJ.T + JJ @ II.T
+        U,S,Vh = np.linalg.svd(Cinf)
+
+        # Compute rectification up to affinity
+        Hp_prime_inv = np.linalg.inv(np.array([[1, 0, 0],
+                        [0, 1, 0],
+                        [-linf[0][0]/linf[2][0], -linf[1][0]/linf[2][0], 1/linf[2][0]]]))
+        
+        # Compute rectification up to similarity
+        H_sim = np.real_if_close(U)
+        H_sim_inv = np.linalg.inv(H_sim)
+
+        # Test rectification to see which one returns a proper circle (A is equal to C, and B =0)
+        error = 0
+        for conic in conics:
+            circle = apply_conic_homography(conic, H_sim_inv)
+            error += abs(circle[1]) + abs(circle[0] - circle[2]) # B + (A-C)
+
+        # Store this candidate solution
+        candidate_solutions.append([linf, Cinf, Hp_prime_inv, H_sim_inv])    
+        candidate_error.append(error)    
+
+    # Choose and return the best solution, the one with the least error
+    idx = np.array(candidate_error).argmin()
+    return candidate_solutions[idx]
+        
 ######################## PLOTTING FUNCTION ###########################
 
 def extract_ellipse_params(A, B, C, D, E, F):
@@ -386,69 +567,26 @@ def main():
     C2 = fit_ellipse(proj_circle_2)
 
     # Get the intersection points
-    sol, sol_w = intersect_ellipses(C1, C2)
+    sol = intersect_ellipses_numerical(C1, C2)
     print("test")
 
-    #evaluate the solutions
-    x1, y1 = sol[0]
-    x2, y2 = sol[1]
-    # x3, y3 = sol[2]
-    # x4, y4 = sol[3]
-
-    # Cc1 = np.array([[C1[0],   C1[1]/2, C1[3]/2],
-    #                 [C1[1]/2, C1[2],   C1[4]/2],
-    #                 [C1[3]/2, C1[4]/2, C1[5]]])
-    
-    # Cc2 = np.array([[C2[0],   C2[1]/2, C2[3]/2],
-    #                 [C2[1]/2, C2[2],   C2[4]/2],
-    #                 [C2[3]/2, C2[4]/2, C2[5]]])
-    
-    p1 = np.array([x1,y1,1]).reshape((-1,1))
-    p2 = np.array([x2,y2,1]).reshape((-1,1))
-    # p3 = np.array([x3,y3,1]).reshape((-1,1))
-    # p4 = np.array([x4,y4,1]).reshape((-1,1))
-
-    # II = p3
-    # JJ = p4
-    II = p1
-    JJ = p2
-
-    # line at infinity
-    linf = np.cross(II.reshape((-1,)), JJ.reshape((-1,))).reshape((-1,1))
-    linf = linf/linf[2] # normalize by the independent element
-    linf = np.real_if_close(linf)
-
-    Cinf = II @ JJ.T + JJ @ II.T
-    U,S,Vh = np.linalg.svd(Cinf)
+    # Compute the homography to correct the perspective
+    linf, Cinf, H_affinity, H_projective = compute_correcting_homography(sol, [C1, C2])
 
     ###################### Projective -> Affine rectification ##############
 
-    Hp_prime_inv = np.linalg.inv(np.array([[1, 0, 0],
-                         [0, 1, 0],
-                         [-linf[0][0]/linf[2][0], -linf[1][0]/linf[2][0], 1/linf[2][0]]]))
-    
-    # Ground truth fo the line at infinity
-    # Hp_prime_inv_orig = np.linalg.inv(np.array([[1, 0, 0],
-    #                      [0, 1, 0],
-    #                      [-linf_orig[0]/linf_orig[2], -linf_orig[1]/linf_orig[2], 1/linf_orig[2]]]))
-    # Hp_prime_inv = Hp_prime_inv_orig
-
-
-    affine_grid_p1 = apply_point_homography(proj_grid_p1, Hp_prime_inv)
-    affine_grid_p2 = apply_point_homography(proj_grid_p2, Hp_prime_inv)
-    affine_circle_1 = apply_point_homography(proj_circle_1, Hp_prime_inv)
-    affine_circle_2 = apply_point_homography(proj_circle_2, Hp_prime_inv)
+    affine_grid_p1 = apply_point_homography(proj_grid_p1, H_affinity)
+    affine_grid_p2 = apply_point_homography(proj_grid_p2, H_affinity)
+    affine_circle_1 = apply_point_homography(proj_circle_1, H_affinity)
+    affine_circle_2 = apply_point_homography(proj_circle_2, H_affinity)
 
 
     ###################### Affine -> Similarity rectification ##############
 
-    H_sim = np.real_if_close(U)
-    H_sim_inv = np.linalg.inv(H_sim)
-
-    similarity_grid_p1 = apply_point_homography(proj_grid_p1, H_sim_inv)
-    similarity_grid_p2 = apply_point_homography(proj_grid_p2, H_sim_inv)
-    similarity_circle_1 = apply_point_homography(proj_circle_1, H_sim_inv)
-    similarity_circle_2 = apply_point_homography(proj_circle_2, H_sim_inv)
+    similarity_grid_p1 = apply_point_homography(proj_grid_p1, H_projective)
+    similarity_grid_p2 = apply_point_homography(proj_grid_p2, H_projective)
+    similarity_circle_1 = apply_point_homography(proj_circle_1, H_projective)
+    similarity_circle_2 = apply_point_homography(proj_circle_2, H_projective)
 
 ########################## PLOT ###########################
 
