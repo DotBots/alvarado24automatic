@@ -94,6 +94,50 @@ def plot_trajectory_and_error(lh2_data, camera_data, error, start_time, end_time
     plt.show()
 
 
+def plot_projected_LH_views(pts_a, pts_b, extra_pts=None):
+    """
+    Plot the projected views from each of the lighthouse
+    """
+
+    fig = plt.figure(layout="constrained")
+    gs = GridSpec(6, 3, figure = fig)
+    lh1_ax    = fig.add_subplot(gs[0:3, 0:3])
+    lh2_ax = fig.add_subplot(gs[3:6, 0:3])
+    axs = (lh1_ax, lh2_ax)
+
+    t = np.arange(pts_a.shape[0])
+
+    # 2D plots - LH2 perspective
+    lh1_ax.scatter(pts_a[:,0], pts_a[:,1], c=t,cmap='inferno', alpha=0.5, lw=1, label="LH1")
+    lh2_ax.scatter(pts_b[:,0], pts_b[:,1], c=t,cmap='inferno', alpha=0.5, lw=1, label="LH2")
+    lh1_ax.scatter(pts_a[0,0], pts_a[0,1], color='xkcd:blue', alpha=1, lw=1, label="top_point")
+    lh2_ax.scatter(pts_b[0,0], pts_b[0,1], color='xkcd:blue', alpha=1, lw=1, label="top_point")
+
+    # Plot the groundtruth of the top point to check if the conversion is working well.
+    if extra_pts != None:
+        LHA, LHC = extra_pts
+        lh1_ax.scatter(LHA[0], LHA[1], color='xkcd:pink', alpha=1, lw=1, label="top point real")
+        lh2_ax.scatter(LHC[0], LHC[1], color='xkcd:pink', alpha=1, lw=1, label="top point real")
+
+    # Add labels and grids
+    for ax in axs:
+        ax.grid()
+        ax.legend()
+    lh1_ax.axis('equal')
+    lh2_ax.axis('equal')
+    # 
+    lh1_ax.set_xlabel('U [px]')
+    lh1_ax.set_ylabel('V [px]')
+    #
+    lh2_ax.set_xlabel('U [px]')
+    lh2_ax.set_ylabel('V [px]')
+    #
+    # lh1_ax.invert_yaxis()
+    # lh2_ax.invert_yaxis()
+
+    plt.show()
+
+
 def plot_error_histogram(errors):
     """
 
