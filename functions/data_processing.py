@@ -19,10 +19,10 @@ def process_calibration(calib_data):
     # Project calibration points 
     for corner in ['tl','tr','bl','br']:
         # Project the points
-        c1a = np.array([calib_data['corners_lh2_count'][corner]['LHA_count_1']])
-        c2a = np.array([calib_data['corners_lh2_count'][corner]['LHA_count_2']])
-        c1b = np.array([calib_data['corners_lh2_count'][corner]['LHB_count_1']])
-        c2b = np.array([calib_data['corners_lh2_count'][corner]['LHB_count_2']])
+        c1a = np.array([calib_data['corners_lh2_count'][corner]['lha_count_0']])
+        c2a = np.array([calib_data['corners_lh2_count'][corner]['lha_count_1']])
+        c1b = np.array([calib_data['corners_lh2_count'][corner]['lhb_count_0']])
+        c2b = np.array([calib_data['corners_lh2_count'][corner]['lhb_count_1']])
         pts_A = LH2_count_to_pixels(c1a, c2a, 0)
         pts_B = LH2_count_to_pixels(c1b, c2b, 1)
 
@@ -106,10 +106,10 @@ def import_data(data_file, mocap_file, calib_file):
     merged_data = pd.DataFrame({
                           'timestamp' : lh_data['timestamp'],
                           'time_s' : lh_data['time_s'],
-                          'LHA_count_1' : lh_data['LHA_count_1'],
-                          'LHA_count_2' : lh_data['LHA_count_2'],
-                          'LHB_count_1' : lh_data['LHB_count_1'],
-                          'LHB_count_2' : lh_data['LHB_count_2'],
+                          'LHA_count_1' : lh_data['lha_count_0'],
+                          'LHA_count_2' : lh_data['lha_count_1'],
+                          'LHB_count_1' : lh_data['lhb_count_0'],
+                          'LHB_count_2' : lh_data['lhb_count_1'],
                           'real_x_mm': mocap_np['x_interp_lh'],
                           'real_y_mm': mocap_np['y_interp_lh'],
                           'real_z_mm': mocap_np['z_interp_lh']}
