@@ -29,7 +29,7 @@ def rotation_matrix_from_vectors(vec1, vec2):
 #########################################################################
 
 # Sample TSV data (you would replace this with your actual TSV file content)
-tsv_data_file = "test_1/test_1_6D.tsv"
+tsv_data_file = "scene_1/scene_1_6D.tsv"
 # Read the TSV data into a DataFrame
 df_data = pd.read_csv(tsv_data_file, sep='\t', skiprows=13)
 data_start_time = pd.read_csv(tsv_data_file, sep='\t', skiprows = lambda x: x not in [7]).columns[1]
@@ -59,7 +59,7 @@ df_data['timestamp'] = df_data['timestamp'].dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
 
 
 # Save the selected columns to a CSV file
-csv_data_file_path = 'test_1/test_1_data.csv'  # Specify your desired file path here
+csv_data_file_path = 'scene_1/scene_1_data.csv'  # Specify your desired file path here
 df_data.to_csv(csv_data_file_path, index=True)
 
 print(f"File saved to {csv_data_file_path}")

@@ -1,5 +1,4 @@
 # import the necessary packages
-import cv2
 import json
 import numpy as np
 import pandas as pd
@@ -33,9 +32,9 @@ end_time = 1.5e3 # seconds
 ####################################################################################
 
 # file with the data to analyze
-LH_data_file = f'./dataset/test_{experiment_number}/lh_data.csv'
-mocap_data_file = f'./dataset/test_{experiment_number}/mocap_data.csv'
-calib_file = './dataset/ground_truth/calibration.json'
+LH_data_file = f'./dataset/scene_{experiment_number}/lh_data.csv'
+mocap_data_file = f'./dataset/scene_{experiment_number}/mocap_data.csv'
+calib_file = './dataset/calibration.json'
 
 # Import data
 df, calib_data = import_data(LH_data_file, mocap_data_file, calib_file)
@@ -48,6 +47,9 @@ for LH in ['LHA', 'LHB']:
     # Project sweep angles on to the z=1 image plane
     pts_lighthouse_A = LH2_count_to_pixels(df['LHA_count_1'].values, df['LHA_count_2'].values, 0)
     pts_lighthouse_B = LH2_count_to_pixels(df['LHB_count_1'].values, df['LHB_count_2'].values, 1)
+
+    # Plot the LH view for debbuging
+    plot_projected_LH_views(pts_lighthouse_A, pts_lighthouse_B)
 
     # Add the LH2 projected matrix into the dataframe that holds the info about what point is where in real life.
     df['LHA_proj_x'] = pts_lighthouse_A[:,0]
