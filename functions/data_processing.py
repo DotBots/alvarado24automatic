@@ -161,9 +161,9 @@ def LH2_count_to_pixels(count_1, count_2, mode):
 
     # Project the angles into the z=1 image plane
     pts_lighthouse = np.zeros((len(count_1),2))
-    for i in range(len(count_1)):
+    for i in range(pts_lighthouse.shape[0]):
         pts_lighthouse[i,0] = -np.tan(azimuth[i])
-        pts_lighthouse[i,1] = -np.sin(a2[i]/2-a1[i]/2-60*np.pi/180)/np.tan(np.pi/6) * 1/np.cos(azimuth[i])
+        pts_lighthouse[i,1] = -np.sin(abs(a2[i]/2-a1[i]/2)-60*np.pi/180)/np.tan(np.pi/6) * 1/np.cos(azimuth[i])
 
     # Return the projected points
     return pts_lighthouse
