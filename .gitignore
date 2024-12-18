@@ -62,7 +62,7 @@ cover/
 *.pot
 
 # Django stuff:
-*.log
+# *.log    # Not this one, we need to save the pydotbot.log files as the raw Lighthouse dataset 
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
