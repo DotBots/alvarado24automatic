@@ -25,15 +25,6 @@ from functions.plotting import plot_trajectory_and_error, plot_error_histogram, 
 ####################################################################################
 # Define which of the 6 experimetns you want to plot
 experiment_number = 1
-LH='LHA'
-# Define the start and end time for the plotted trajectory. Useful for plotting smaller sections of large experiments
-# Also controls what data is used for calculating the error.
-# start_idx = 1617 # df.loc index
-# end_idx = 5266 # df.loc index
-# start_idx = 1626 # df.loc index
-# end_idx = 4200 # df.loc index
-# Time offset between the LH and the Mocap
-# time_offest = 200000e-6
 
 ####################################################################################
 ###                            Read Dataset                                      ###
