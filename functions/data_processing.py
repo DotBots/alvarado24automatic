@@ -4,6 +4,7 @@ import pandas as pd
 import cv2
 from dateutil import parser
 import re
+from skspatial.objects import Plane
 
 ####################################################################################
 ###                                 Private                                      ###
@@ -31,6 +32,18 @@ def process_calibration(calib_data):
         calib_data['corners_lh2_proj']['LHB'][corner] = pts_B[0]
 
     return calib_data
+
+
+def rotation_matrix_from_vectors(vec1, vec2):
+    """ Find the rotation matrix that aligns vec1 to vec2 """
+    a, b = (vec1 / np.linalg.norm(vec1)).reshape(3), (vec2 / np.linalg.norm(vec2)).reshape(3)
+    v = np.cross(a, b)
+    c = np.dot(a, b)
+    s = np.linalg.norm(v)
+    kmat = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
+
+    rotation_matrix = np.eye(3) + kmat + kmat.dot(kmat) * ((1 - c) / (s ** 2))
+    return rotation_matrix
 
 ####################################################################################
 ###                                  Public                                      ###
@@ -125,6 +138,20 @@ def import_data(data_file, mocap_file, calib_file, time_offset = None, experimen
                           'real_y_mm': mocap_np['y_interp_lh'],
                           'real_z_mm': mocap_np['z_interp_lh']}
                           )
+
+
+    ## The mocap data plane is not perfectly horizontal, make it so.
+    # Get a best plane fit
+    best_plane = Plane.best_fit(merged_data[['real_x_mm', 'real_y_mm', 'real_z_mm']].values)
+    normal = np.array(best_plane.normal)
+    z1 = np.array([0,0,1])
+    R = rotation_matrix_from_vectors(normal, z1)
+    # Straighten out the plane data.
+    merged_data[['real_x_mm','real_y_mm','real_z_mm']] =  (R @ merged_data[['real_x_mm','real_y_mm','real_z_mm']].values.T).T
+
+    # Apply the straightening to the calibration corners
+    for corner in ['tl', 'tr', 'bl', 'br']:
+        calib_data[scene_id]['corners_mm'][corner] = (R @ calib_data[scene_id]['corners_mm'][corner].T).T
 
     return merged_data, calib_data[scene_id], experiment_indices
 
