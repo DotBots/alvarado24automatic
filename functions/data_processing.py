@@ -37,7 +37,7 @@ def process_calibration(calib_data):
 ####################################################################################
 
 
-def import_data(data_file, mocap_file, calib_file):
+def import_data(data_file, mocap_file, calib_file, time_offset = None, experiment_indices = None):
 
     # Read the files.
     lh_data = pd.read_csv(data_file, index_col=0, parse_dates=['timestamp'])
@@ -50,6 +50,17 @@ def import_data(data_file, mocap_file, calib_file):
 
     # Add a Z=0 axis to the Camera (X,Y) coordinates.
     # exp_data['z'] = 0.0
+
+    # Get time offset from the calib file if it's not specified
+    if time_offset == None:
+        time_offset = calib_data[scene_id]["dataset_time_offset"]
+
+    # Get the start and end index of the experiment dataset from the calib file if it's not specified
+    if experiment_indices == None:
+        start_idx = calib_data[scene_id]["experiment_timeframe"]["start_idx"]
+        end_idx = calib_data[scene_id]["experiment_timeframe"]["end_idx"]
+        experiment_indices = (start_idx, end_idx)
+
 
     # Convert the strings to datetime objects
     for key in lh2_calib_time:
@@ -97,7 +108,7 @@ def import_data(data_file, mocap_file, calib_file):
     lh_time = lh_data['time_s'].to_numpy()
 
     # Offset the camera timestamp to get rid of the communication delay.
-    mocap_np['time'] += 265000e-6 # seconds
+    mocap_np['time'] += time_offset # seconds
     mocap_np['x_interp_lh'] = np.interp(lh_time, mocap_np['time'],  mocap_np['x'])
     mocap_np['y_interp_lh'] = np.interp(lh_time, mocap_np['time'],  mocap_np['y'])
     mocap_np['z_interp_lh'] = np.interp(lh_time, mocap_np['time'],  mocap_np['z'])
@@ -115,7 +126,7 @@ def import_data(data_file, mocap_file, calib_file):
                           'real_z_mm': mocap_np['z_interp_lh']}
                           )
 
-    return merged_data, calib_data[scene_id]
+    return merged_data, calib_data[scene_id], experiment_indices
 
 def read_calibration_file(calib_filename):
     """
