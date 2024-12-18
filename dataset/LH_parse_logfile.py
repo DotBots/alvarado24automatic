@@ -11,7 +11,7 @@ from matplotlib.gridspec import GridSpec
 ###                                Options                                ###
 #############################################################################
 
-scene_number = 2
+scene_number = 1
 
 #############################################################################
 ###                                Code                                   ###
@@ -187,7 +187,7 @@ def clear_outliers(df, speed_threshold=5e3, jump_threshold=7e3):
                 break
 
             # Check for any lha_coun_1 with is not 42439 (this is a glitch value)
-            if df.loc[index_list[i]]['lha_count_0'] in [42439, 33746, 54634, 37796]:
+            if df.loc[index_list[i]]['lha_count_0'] in [42439, 33746, 54634, 37796, 34983]:
                 df.drop(index_list[i], axis=0, inplace=True)
                 should_restart = True
                 print(f"[!] - lha_count_0 == 42439, 33746, 54634: {index_list[i]}")
