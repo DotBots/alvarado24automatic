@@ -5,6 +5,7 @@ import cv2
 from dateutil import parser
 import re
 from skspatial.objects import Plane
+import sympy as sp
 
 ####################################################################################
 ###                                 Private                                      ###
@@ -32,7 +33,6 @@ def process_calibration(calib_data):
         calib_data['corners_lh2_proj']['LHB'][corner] = pts_B[0]
 
     return calib_data
-
 
 def rotation_matrix_from_vectors(vec1, vec2):
     """ Find the rotation matrix that aligns vec1 to vec2 """
@@ -326,7 +326,6 @@ def interpolate_camera_to_lh2(camera_data, lh2_data):
     
     return interp_data
 
-
 def find_closest_point(data, t):
     """
     returns the [x,y] pair closest to a particular t.
@@ -357,7 +356,6 @@ def find_closest_point(data, t):
     idx = np.abs(data['time'] - t).argmin()
     point = [data['x'][idx], data['y'][idx]]
     return point
-
 
 def get_start_end_index(data, t_start, t_stop):
     """
@@ -390,3 +388,292 @@ def get_start_end_index(data, t_start, t_stop):
     idx = np.abs(data['time'] - t).argmin()
     point = [data['x'][idx], data['y'][idx]]
     return point
+
+
+####################################################################################
+###                            Conic Algorithm                                   ###
+####################################################################################
+
+### Private Functions
+# 3. Calculate the line at infinity from the calibration grid
+def compute_line_at_infinity(proj_calib_points):
+    
+    # make the points homogeneous
+    ones = np.ones((proj_calib_points["start"].shape[0],1))
+    proj_calib_points["start"] = np.hstack((proj_calib_points["start"], ones))
+    proj_calib_points["end"] = np.hstack((proj_calib_points["end"], ones))
+
+    # Cross product of the start and end point of the line to get the line homogeneous equation.
+    l1 = np.cross(proj_calib_points["start"][0], proj_calib_points["end"][0])
+    l2 = np.cross(proj_calib_points["start"][1], proj_calib_points["end"][1])
+    l3 = np.cross(proj_calib_points["start"][2], proj_calib_points["end"][2])
+    l4 = np.cross(proj_calib_points["start"][3], proj_calib_points["end"][3])
+
+    # Cross product the lines to get the homogeneous points at the image of the line at infinity
+    p1_inf = np.cross(l1, l2)
+    p2_inf = np.cross(l3, l4)
+
+    # Cross product of the infinite points to get the image of the line at infinite.
+    linf = np.cross(p1_inf, p2_inf)
+
+    return linf
+
+def apply_point_homography(points, H):
+
+    # If the point only has a single dimension, add another
+    if len(points.shape) == 1:
+        points = points.reshape((1,-1))
+
+    # If the points are, 2D, add a third dimension
+    if points.shape[1] == 2:
+        ones = np.ones((points.shape[0],1))
+        points = np.hstack((points, ones))
+
+    # Transform the points trough the Homography
+    h_points = (H @ points.T).T
+    # Normalize the homogeneous points
+    h_points = h_points/h_points[:,2,np.newaxis]
+
+    return h_points
+
+def apply_conic_homography(conic, H):
+    # Re arm the conic equation into its matrix form
+    if len(conic) == 6:
+        A, B, C, D, E, F = conic
+    if conic.shape == (3,3):
+        A = conic[0,0]
+        B = conic[1,0]*2
+        C = conic[1,1]
+        D = conic[0,2]*2
+        E = conic[1,2]*2
+        F = conic[2,2]
+
+    C_orig = np.array([[A,   B/2, D/2],
+                  [B/2, C,   E/2],
+                  [D/2, E/2, F]])
+    
+    # invert the Homography matrix
+    Hinv = np.linalg.inv(H)
+
+    # Perform Homography transformation
+    C_homo = Hinv.T @ C_orig @ Hinv
+
+    # Extract the parameters of the new conic
+    A_h = C_homo[0,0]
+    B_h = C_homo[1,0] * 2
+    C_h = C_homo[1,1]
+    D_h = C_homo[0,2] * 2
+    E_h = C_homo[1,2] * 2
+    F_h = C_homo[2,2]
+
+    # Return the new conic parameters
+    return A_h, B_h, C_h, D_h, E_h, F_h
+
+# 1. Ellipses fitting
+def fit_ellipse(points):
+
+    x = points[:,0]
+    y = points[:,1]
+
+    # Construct the design matrix for the equation Ax^2 + Bxy + Cy^2 + Dx + Ey + F = 0
+    D = np.vstack([x**2, x*y, y**2, x, y, np.ones_like(x)]).T
+
+    _, _, V = np.linalg.svd(D)  # Singular Value Decomposition for more stability
+    params = V[-1, :]           # Solution is in the last row of V
+
+    a,b,c,d,e,f = params
+
+    residual = a * x**2 + b * x*y + c * y**2 + d * x + e * y + f
+
+    return params, residual  # Returns the coefficients [A, B, C, D, E, F]
+
+
+### Public Functions
+
+def get_circles(df:pd.DataFrame, calib_data:dict, LH: str):
+    """
+    Extracts the data related to calibration circles, as indicated by the calibration data.
+    Fits them to a conic equation
+
+    Params:
+        df: dataset, with the following columns: ['timestamp', 'time_s', 'LHA_count_1', 'LHA_count_2', 'LHB_count_1',
+                                                    'LHB_count_2', 'real_x_mm', 'real_y_mm', 'real_z_mm', 'LHA_proj_x',
+                                                    'LHA_proj_y', 'LHB_proj_x', 'LHB_proj_y']
+
+        calib_data: calibration data with the start and end timestamp of every circle
+
+        LH: 'LHA' or 'LHB', depending of which LH we are working with,
+    """
+    bit = 5
+    circles = []
+    for id in list(calib_data['circles'].keys()):
+
+        # Compatibility for a previous version of the code
+        if id == 'quantity': continue
+
+        # Get start and end timestamp for the circle data
+        start = calib_data['circles'][id][0]
+        end   = calib_data['circles'][id][1]
+
+        # Extract the selected LH projected data
+        circle_data = df.loc[ (df['timestamp'] > start) & (df['timestamp'] < end)]
+        points = circle_data[[LH+'_proj_x',LH+'_proj_y']].values
+
+        # Try to fit the data to an ellipse conic
+        circle, residual = fit_ellipse(points)  
+
+        # Add it to the list      
+        circles.append(circle)
+
+        # Print the equation for debbuging purposes
+        print(f"param: {circle}, residual: {abs(residual).mean()} ")
+    
+    return circles
+
+
+# 2. Ellipses intersection
+def intersect_ellipses(C1, C2):
+    """
+    This function returns all imaginary intersection points of the Conic sections C1 and C2. In their standard form:
+    Ax^2 + Bxy + Cy^2 + Dx + Ey + F = 0
+    And in the homogenous form at infinite, where W=0
+    Ax^2 + Bxy + Cy^2 + Dxw + Eyw + Fw^2 = 0    ; thus
+    Ax^2 + Bxy + Cy^2 = 0
+    """
+
+    ## starting seeds
+    seed_values = [1+1j, 1-1j, -1+1j, -1-1j]
+
+    solutions = []
+    solutions_w = []
+    # Iterate over all the possible startng value
+    for x0 in seed_values:
+        for y0 in seed_values:
+            x,y = sp.symbols('x y',complex=True)
+            # Standard form
+            eq1 = C1[0]*x**2 + C1[1]*x*y + C1[2]*y**2 + C1[3]*x + C1[4]*y + C1[5]
+            eq2 = C2[0]*x**2 + C2[1]*x*y + C2[2]*y**2 + C2[3]*x + C2[4]*y + C2[5]
+
+            # Homogeneous w=0 infinite equations
+            eq1_w = C1[0]*x**2 + C1[1]*x*y + C1[2]*y**2
+            eq2_w = C2[0]*x**2 + C2[1]*x*y + C2[2]*y**2 
+
+            found_flag = False
+            found_flag_w = False
+            try:
+                local_solutions = sp.nsolve([eq1, eq2], (x,y), (x0,y0))
+                found_flag = True
+            except:
+                pass    
+
+            try:
+                local_solutions_w = sp.nsolve([eq1_w, eq2_w], (x,y), (x0,y0))
+                found_flag_w = True
+            except:
+                pass
+
+            if found_flag:
+                # Convert solution to numpy
+                numeric_solution = np.array(local_solutions, dtype=np.complex128)
+                # Go one by one and get rid of floating point errors (real_if_close, close_to_zero)
+                for i in range(numeric_solution.shape[0]):
+                    for j in range(numeric_solution.shape[1]):
+
+                        # Check if number is real
+                        numeric_solution[i][j] = np.real_if_close(numeric_solution[i][j])
+
+                        # Check if real part is zero
+                        if np.isclose(np.real(numeric_solution[i][j]),0): numeric_solution[i][j] = 1j * np.imag(numeric_solution[i][j]) 
+
+                        # Check if number is zero
+                        if np.isclose(np.real(numeric_solution[i][j]),0) and np.isclose(np.imag(numeric_solution[i][j]),0): numeric_solution[i][j] = 0
+        
+                # Add to the list of solutions if it's not there. (also add the complex conjugate, because it will appear there sooner or later)
+                # Standard
+                if not np.any(numeric_solution == solutions):
+                    solutions.append(numeric_solution)
+                # Conjugate
+                if not np.any(np.conjugate(numeric_solution) == solutions):
+                    solutions.append(np.conjugate(numeric_solution))
+
+            if found_flag_w:
+                # Convert solution to numpy
+                numeric_solution_w = np.array(local_solutions_w, dtype=np.complex128)
+                # Same as above, but for the homogeneous w=0 case
+                for i in range(numeric_solution_w.shape[0]):
+                    for j in range(numeric_solution_w.shape[1]):
+
+                        # Check if number is real
+                        numeric_solution_w[i][j] = np.real_if_close(numeric_solution_w[i][j])
+
+                        # Check if real part is zero
+                        if np.isclose(np.real(numeric_solution_w[i][j]),0): numeric_solution_w[i][j] = 1j * np.imag(numeric_solution_w[i][j]) 
+
+                        # Check if number is zero
+                        if np.isclose(np.real(numeric_solution_w[i][j]),0) and np.isclose(np.imag(numeric_solution_w[i][j]),0): numeric_solution_w[i][j] = 0
+
+                # Add to the list of solutions if it's not there. (also add the complex conjugate, because it will appear there sooner or later)
+                # Standard
+                if not np.any(numeric_solution_w == solutions_w):
+                    solutions_w.append(numeric_solution_w)
+                # Conjugate
+                if not np.any(np.conjugate(numeric_solution_w) == solutions_w):
+                    solutions_w.append(np.conjugate(numeric_solution_w))
+
+    # Split the results into complex conjugates pairs
+    sorted_results = []
+    # Normal results (w=1 equation)
+    if len(solutions) > 0:
+        for sol in solutions:
+            if not np.any(sol == sorted_results):
+                sorted_results.append([sol, np.conjugate(sol)])
+    # Inifite results (w=0, for when H is an affinity)
+    if len(solutions_w) > 0:
+        for sol in solutions_w:
+            if not np.any(sol == sorted_results):
+                sorted_results.append([sol, np.conjugate(sol)])    
+
+    return sorted_results
+
+# 8. Compute Correcting Homography 
+def compute_correcting_homography(intersections, conics):
+
+    # candidate solutions, we will store the possible solutions and return the best one.
+    candidate_solutions = []
+    candidate_error = []
+
+    for sol in intersections:
+        # Extract the image of the circular points
+        II = np.array([sol[0][0][0],sol[0][1][0],1]).reshape((-1,1))
+        JJ = np.array([sol[1][0][0],sol[1][1][0],1]).reshape((-1,1))
+        # Calculate the Line at infinity
+        linf = np.cross(II.reshape((-1,)), JJ.reshape((-1,))).reshape((-1,1))
+        linf = linf/linf[2] # normalize by the independent element
+        linf = np.real_if_close(linf)
+        # Calculate the Dual Conic
+        Cinf = II @ JJ.T + JJ @ II.T
+        U,S,Vh = np.linalg.svd(Cinf)
+
+        # Compute rectification up to affinity
+        Hp_prime_inv = np.linalg.inv(np.array([[1, 0, 0],
+                        [0, 1, 0],
+                        [-linf[0][0]/linf[2][0], -linf[1][0]/linf[2][0], 1/linf[2][0]]]))
+        
+        # Compute rectification up to similarity
+        H_sim = np.real_if_close(U)
+        H_sim_inv = np.linalg.inv(H_sim)
+
+        # Test rectification to see which one returns a proper circle (A is equal to C, and B =0)
+        error = 0
+        for conic in conics:
+            circle = apply_conic_homography(conic, H_sim_inv)
+            error += abs(circle[1]) + abs(circle[0] - circle[2]) # B + (A-C)
+
+        # Store this candidate solution
+        candidate_solutions.append([linf, Cinf, Hp_prime_inv, H_sim_inv])    
+        candidate_error.append(error)    
+
+    # Choose and return the best solution, the one with the least error
+    idx = np.array(candidate_error).argmin()
+    return candidate_solutions[idx]
+        
