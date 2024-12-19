@@ -37,7 +37,6 @@ calib_file = './dataset/calibration.json'
 
 # Import data
 df, calib_data, (start_idx, end_idx) = import_data(LH_data_file, mocap_data_file, calib_file)
-# start_idx, end_idx = experiment_indices
 
 start_time = df.loc[start_idx]['time_s'] - df.iloc[0]['time_s']
 end_time   = df.loc[end_idx]['time_s']   - df.iloc[0]['time_s']
@@ -60,13 +59,16 @@ for LH in ['LHA', 'LHB']:
     df['LHB_proj_x'] = pts_lighthouse_B[:,0]
     df['LHB_proj_y'] = pts_lighthouse_B[:,1]
 
+    ####################################################################################
+    ###                             1LH 2D algorithm                                 ###
+    ####################################################################################
+
     # Extract the calibration points needed to calibrate the homography.
     pts_src = np.array([calib_data['corners_lh2_proj'][LH][key][0:2] for key in ['tl', 'tr', 'br', 'bl']])
     pts_dst = np.array([calib_data['corners_mm'][key][0:2] for key in ['tl', 'tr', 'br', 'bl']])
 
     # Convert the 4k camera pixel data and the LH2 pixel data to the world coordinate frame of reference.
     pts_cm_lh2 = camera_to_world_homography(df, calib_data)
-
 
     # Calculate the L2 distance error
     error = np.linalg.norm(
