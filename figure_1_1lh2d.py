@@ -63,10 +63,6 @@ for LH in ['LHA', 'LHB']:
     ###                             1LH 2D algorithm                                 ###
     ####################################################################################
 
-    # Extract the calibration points needed to calibrate the homography.
-    pts_src = np.array([calib_data['corners_lh2_proj'][LH][key][0:2] for key in ['tl', 'tr', 'br', 'bl']])
-    pts_dst = np.array([calib_data['corners_mm'][key][0:2] for key in ['tl', 'tr', 'br', 'bl']])
-
     # Convert the 4k camera pixel data and the LH2 pixel data to the world coordinate frame of reference.
     pts_cm_lh2 = camera_to_world_homography(df, calib_data)
 
