@@ -469,7 +469,6 @@ def apply_conic_homography(conic, H):
     # Return the new conic parameters
     return A_h, B_h, C_h, D_h, E_h, F_h
 
-# 1. Ellipses fitting
 def fit_ellipse(points):
 
     x = points[:,0]
@@ -486,7 +485,6 @@ def fit_ellipse(points):
     residual = a * x**2 + b * x*y + c * y**2 + d * x + e * y + f
 
     return params, residual  # Returns the coefficients [A, B, C, D, E, F]
-
 
 ### Public Functions
 
@@ -526,10 +524,9 @@ def get_circles(df:pd.DataFrame, calib_data:dict, LH: str):
         circles.append(circle)
 
         # Print the equation for debbuging purposes
-        print(f"param: {circle}, residual: {abs(residual).mean()} ")
+        # print(f"param: {circle}, residual: {abs(residual).mean()} ")
     
     return circles
-
 
 # 2. Ellipses intersection
 def intersect_ellipses(C1, C2):
@@ -677,3 +674,140 @@ def compute_correcting_homography(intersections, conics):
     idx = np.array(candidate_error).argmin()
     return candidate_solutions[idx]
         
+def apply_corrective_homography(df, H):
+    """
+    Calculate the homography transformation between src_corners and dst_corners.
+    And apply that transformation to df
+    
+    Parameters
+    ----------
+    df : dataframe with {'x', 'y'} columns
+        points to transform.
+    H : numpy array (3,3).
+        Homography matrix that solves corrects the projective and affinity distortion
+
+    Returns
+    -------
+    output_points : array_like, shape (N,2)
+        points transformed to dst_corners frame of reference
+    """
+
+    for LH in ['LHA', 'LHB']:
+
+        # Prepare pixel points to convert
+        # input_points = df[[LH+'_proj_x', LH+'_proj_y']].to_numpy().reshape((1,-1,2))
+        input_points = df[[LH+'_proj_x', LH+'_proj_y']].to_numpy().reshape((-1,2))
+        # pts_example = np.array([[[200, 400], [1000, 1500], [3000, 2000]]], dtype=float)  # Shape of the input array must be (1, n_points, 2), note the double square brackets before and after the points.
+
+        # Run the transformation
+        # output_points = cv2.perspectiveTransform(input_points, H)
+        # output_points = output_points.reshape((-1, 2))                  # We can reshape the output so that the points look like [[3,4], [1,4], [5,1]]
+                                                                    # They are easier to work with like this, without all that double square bracket non-sense
+
+        output_points = apply_point_homography(input_points, H)
+
+        # save results to the main dataframe
+        df[LH+'_hom_x'] = output_points[:,0]                              
+        df[LH+'_hom_y'] = output_points[:,1]                              
+
+    return df
+
+
+def correct_similarity_distrotion(df, calib_data):
+    """
+    Create a rotation and translation vector to move the reconstructed grid onto the origin for better comparison.
+    Using an SVD, according to: https://nghiaho.com/?page_id=671
+    """
+
+    # Get the calibration corners
+    tl = df.loc[ (df['timestamp'] > calib_data['timestamps_lh2']["tl"][0]) & (df['timestamp'] < calib_data['timestamps_lh2']["tl"][1])].mean(axis=0, numeric_only=True)
+    tr = df.loc[ (df['timestamp'] > calib_data['timestamps_lh2']["tr"][0]) & (df['timestamp'] < calib_data['timestamps_lh2']["tr"][1])].mean(axis=0, numeric_only=True)
+    bl = df.loc[ (df['timestamp'] > calib_data['timestamps_lh2']["bl"][0]) & (df['timestamp'] < calib_data['timestamps_lh2']["bl"][1])].mean(axis=0, numeric_only=True)
+    br = df.loc[ (df['timestamp'] > calib_data['timestamps_lh2']["br"][0]) & (df['timestamp'] < calib_data['timestamps_lh2']["br"][1])].mean(axis=0, numeric_only=True)
+    
+    
+    
+    for LH in ['LHA', 'LHB']:
+        # Make an array with the ground truth target, and set it as a homogeneous z=1 point.
+        B = np.array([      tl[['real_x_mm', 'real_y_mm', 'real_z_mm']],\
+                            tr[['real_x_mm', 'real_y_mm', 'real_z_mm']],\
+                            bl[['real_x_mm', 'real_y_mm', 'real_z_mm']],\
+                            br[['real_x_mm', 'real_y_mm', 'real_z_mm']]])
+        B[:,2] = 1
+
+        # Make an array with the LH reconstructed points
+        A = np.array([      tl[[LH+'_hom_x', LH+'_hom_y']],\
+                            tr[[LH+'_hom_x', LH+'_hom_y']],\
+                            bl[[LH+'_hom_x', LH+'_hom_y']],\
+                            br[[LH+'_hom_x', LH+'_hom_y']]])
+        # and set it as a homogeneous z=1 point.
+        A = np.hstack([A,np.ones((A.shape[0],1))])
+
+        # B = np.unique(df[['real_x_mm','real_y_mm','real_z_mm']].to_numpy(), axis=0)
+        # A = np.empty_like(B, dtype=float)
+        # for i in range(B.shape[0]):
+        #     A[i] = df.loc[(df['real_x_mm'] == B[i,0])  & (df['real_y_mm'] == B[i,1]) & (df['real_z_mm'] == B[i,2]), ['LH_x', 'LH_y', 'LH_z']].values.mean(axis=0)
+
+        # Get  all the reconstructed points
+        A2 = df[[LH+'_hom_x', LH+'_hom_y']].to_numpy()
+        A2 = np.hstack([A2,np.ones((A2.shape[0],1))])
+        A2 = A2.T
+
+        B2 = df[['real_x_mm', 'real_y_mm']].to_numpy()
+        B2 = np.hstack([B2,np.ones((B2.shape[0],1))])
+        B2 = B2.T
+
+        # Convert the point to column vectors,
+        # to match twhat the SVD algorithm expects
+        A = A.T
+        B = B.T
+
+        # c, R, t = umeyama(A,B)
+        c, R, t = umeyama(A2,B2)
+
+        correct_points = (c*R@A2 + t)
+        correct_points = correct_points.T
+
+        # Update dataframe
+        df[LH+'_Rt_x'] = correct_points[:,0]
+        df[LH+'_Rt_y'] = correct_points[:,1]
+
+    return df, R, t
+
+
+def umeyama(X, Y):
+    """
+    Estimates the Sim(3) transformation between `X` and `Y` point sets.
+
+    Estimates c, R and t such as c * R @ X + t ~ Y.
+
+    Parameters
+    ----------
+    X : numpy.array
+        (m, n) shaped numpy array. m is the dimension of the points,
+        n is the number of points in the point set.
+    Y : numpy.array
+        (m, n) shaped numpy array. Indexes should be consistent with `X`.
+        That is, Y[:, i] must be the point corresponding to X[:, i].
+    
+    Returns
+    -------
+    c : float
+        Scale factor.
+    R : numpy.array
+        (3, 3) shaped rotation matrix.
+    t : numpy.array
+        (3, 1) shaped translation vector.
+    """
+    mu_x = X.mean(axis=1).reshape(-1, 1)
+    mu_y = Y.mean(axis=1).reshape(-1, 1)
+    var_x = np.square(X - mu_x).sum(axis=0).mean()
+    cov_xy = ((Y - mu_y) @ (X - mu_x).T) / X.shape[1]
+    U, D, VH = np.linalg.svd(cov_xy)
+    S = np.eye(X.shape[0])
+    if np.linalg.det(U) * np.linalg.det(VH) < 0:
+        S[-1, -1] = -1
+    c = np.trace(np.diag(D) @ S) / var_x
+    R = U @ S @ VH
+    t = mu_y - c * R @ mu_x
+    return c, R, t

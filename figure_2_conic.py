@@ -12,10 +12,11 @@ from matplotlib.gridspec import GridSpec
 
 from functions.data_processing import   import_data, \
                                         LH2_count_to_pixels, \
-                                        camera_to_world_homography, \
                                         get_circles, \
                                         intersect_ellipses, \
-                                        compute_correcting_homography
+                                        compute_correcting_homography, \
+                                        apply_corrective_homography, \
+                                        correct_similarity_distrotion
 
 
 from functions.plotting import plot_trajectory_and_error, plot_error_histogram, plot_projected_LH_views
@@ -24,7 +25,7 @@ from functions.plotting import plot_trajectory_and_error, plot_error_histogram, 
 ###                               Options                                        ###
 ####################################################################################
 # Define which of the 6 experimetns you want to plot
-experiment_number = 1
+experiment_number = 2
 
 ####################################################################################
 ###                            Read Dataset                                      ###
@@ -67,20 +68,23 @@ for LH in ['LHA', 'LHB']:
     circles = get_circles(df, calib_data, LH)
 
     # Grab two circles to test
-    C1 = circles[0]
-    C2 = circles[1] 
+    C1 = circles[1]
+    C2 = circles[-1] 
 
     sol = intersect_ellipses(C1, C2)
 
     linf, Cinf, H_affinity, H_projective = compute_correcting_homography(sol, [C1, C2])
 
+    df = apply_corrective_homography(df, H_projective)
+
     #TODO: Finish error computing code
     # And make the code that matches both frames of reference, for comparison
+    df,_,_ = correct_similarity_distrotion(df, calib_data)
 
     # Calculate the L2 distance error
     error = np.linalg.norm(
-        df[[LH+'_hom_x',LH+'_hom_y']].values - 
-        df[['real_x_mm','real_y_mm']].values, 
+        df[[LH+'_Rt_x', LH+'_Rt_y']].values - 
+        df[['real_x_mm', 'real_y_mm']].values, 
         axis=1)
     
     errors.append(error[start_idx:end_idx])
@@ -88,8 +92,8 @@ for LH in ['LHA', 'LHB']:
     ###                                 Plot Results                                 ###
     ####################################################################################
 
-    lh2_data = {'x':    df[LH+'_hom_x'].values,
-                'y':    df[LH+'_hom_y'].values,
+    lh2_data = {'x':    df[LH+'_Rt_x'].values,
+                'y':    df[LH+'_Rt_y'].values,
                 'time': df['time_s'].values}
 
     camera_data = { 'x':    df['real_x_mm'].values,
