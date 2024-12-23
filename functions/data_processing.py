@@ -206,7 +206,7 @@ def LH2_count_to_pixels(count_1, count_2, mode):
     # Return the projected points
     return pts_lighthouse
 
-def camera_to_world_homography(df, calib_data,):
+def camera_to_world_homography(df, calib_data, pts_dst=None):
     """
     Calculate the homography transformation between src_corners and dst_corners.
     And apply that transformation to df
@@ -229,7 +229,8 @@ def camera_to_world_homography(df, calib_data,):
     for LH in ['LHA', 'LHB']:
         # Extract the calibration points needed to calibrate the homography.
         pts_src = np.array([calib_data['corners_lh2_proj'][LH][key][0:2] for key in ['tl', 'tr', 'br', 'bl']])  # shape(4,2)
-        pts_dst = np.array([calib_data['corners_mm'][key][0:2] for key in ['tl', 'tr', 'br', 'bl']])            # shape(4,2)
+        if type(pts_dst) == type(None):
+            pts_dst = np.array([calib_data['corners_mm'][key][0:2] for key in ['tl', 'tr', 'br', 'bl']])        # shape(4,2)
 
         # Calculate the Homography Matrix
         H, status = cv2.findHomography(pts_src, pts_dst)
@@ -485,6 +486,22 @@ def fit_ellipse(points):
     residual = a * x**2 + b * x*y + c * y**2 + d * x + e * y + f
 
     return params, residual  # Returns the coefficients [A, B, C, D, E, F]
+
+def distance_between_conics(C1, C2):
+    # Matrix of the quadratic form
+    conic_matrix_1 = np.array([[C1[0], C1[1] / 2], [C1[1] / 2, C1[2]]])
+    conic_matrix_2 = np.array([[C2[0], C2[1] / 2], [C2[1] / 2, C2[2]]])
+    
+    # Translation vector (for completing the square)
+    translation_1 = np.array([C1[3], C1[4]]) / (-2)
+    translation_2 = np.array([C2[3], C2[4]]) / (-2)
+    
+    # Find the center of the ellipse
+    center_1 = np.linalg.solve(conic_matrix_1, translation_1)
+    center_2 = np.linalg.solve(conic_matrix_2, translation_2)
+
+    # return distance between the centers
+    return np.linalg.norm(center_1 - center_2)
 
 ### Public Functions
 
@@ -811,3 +828,33 @@ def umeyama(X, Y):
     R = U @ S @ VH
     t = mu_y - c * R @ mu_x
     return c, R, t
+
+
+def conic_eccentricity(circle):
+    """
+    Computes the eccentricity of a conic section given the coefficients of its general equation:
+    Ax^2 + Bxy + Cy^2 + Dx + Ey + F = 0.
+
+    Parameters:
+        A, B, C, D, E, F (float): Coefficients of the conic equation.
+
+    Returns:
+        float: Eccentricity of the conic section.
+    """
+    # Calculate the discriminant of the conic
+    A, B, C, D, E, F = circle
+
+    conic = np.array([[A, B/2, D/2],
+                      [B/2, C, E/2],
+                      [D/2, E/2, F]])
+    
+    n = -1*np.sign(np.linalg.det(conic))
+
+    discriminant = np.sqrt((A-C)**2 + B**2)
+
+    numerator = np.sqrt(2 * discriminant )
+    denominator = np.sqrt(n*(A+C) + discriminant)
+
+    eccentricity = numerator / denominator
+    
+    return eccentricity

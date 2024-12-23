@@ -16,7 +16,8 @@ from functions.data_processing import   import_data, \
                                         camera_to_world_homography, \
                                         reorganize_data, \
                                         interpolate_camera_to_lh2, \
-                                        find_closest_point
+                                        find_closest_point, \
+                                        correct_similarity_distrotion
 
 from functions.plotting import plot_trajectory_and_error, plot_error_histogram, plot_projected_LH_views
 
@@ -64,12 +65,17 @@ for LH in ['LHA', 'LHB']:
     ####################################################################################
 
     # Convert the 4k camera pixel data and the LH2 pixel data to the world coordinate frame of reference.
-    pts_cm_lh2 = camera_to_world_homography(df, calib_data)
+    pts_dst = np.array([[0,400],[400,400],[400,0],[0,0]])
+    df = camera_to_world_homography(df, calib_data, pts_dst)
+
+    #TODO: Finish error computing code
+    # And make the code that matches both frames of reference, for comparison
+    df,_,_ = correct_similarity_distrotion(df, calib_data)
 
     # Calculate the L2 distance error
     error = np.linalg.norm(
-        df[[LH+'_hom_x',LH+'_hom_y']].values - 
-        df[['real_x_mm','real_y_mm']].values, 
+        df[[LH+'_Rt_x', LH+'_Rt_y']].values - 
+        df[['real_x_mm', 'real_y_mm']].values, 
         axis=1)
     
     errors.append(error[start_idx:end_idx])
@@ -77,8 +83,8 @@ for LH in ['LHA', 'LHB']:
     ###                                 Plot Results                                 ###
     ####################################################################################
 
-    lh2_data = {'x':    df[LH+'_hom_x'].values,
-                'y':    df[LH+'_hom_y'].values,
+    lh2_data = {'x':    df[LH+'_Rt_x'].values,
+                'y':    df[LH+'_Rt_y'].values,
                 'time': df['time_s'].values}
 
     camera_data = { 'x':    df['real_x_mm'].values,

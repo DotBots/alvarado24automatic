@@ -19,13 +19,14 @@ from functions.data_processing import   import_data, \
                                         correct_similarity_distrotion
 
 
-from functions.plotting import plot_trajectory_and_error, plot_error_histogram, plot_projected_LH_views
+from functions.plotting import plot_trajectory_and_error, plot_error_histogram, plot_projected_LH_views, plot_projected_fitted_ellipses
 
 ####################################################################################
 ###                               Options                                        ###
 ####################################################################################
 # Define which of the 6 experimetns you want to plot
 experiment_number = 2
+
 
 ####################################################################################
 ###                            Read Dataset                                      ###
@@ -67,9 +68,13 @@ for LH in ['LHA', 'LHB']:
     # Get the conic equations for all of the circles.
     circles = get_circles(df, calib_data, LH)
 
+    pts = df[[LH+'_proj_x', LH+'_proj_y']].values
+
+    plot_projected_fitted_ellipses(pts, circles)
+
     # Grab two circles to test
-    C1 = circles[4]
-    C2 = circles[6] 
+    C1 = circles[1]
+    C2 = circles[-1] 
 
     sol = intersect_ellipses(C1, C2)
 
@@ -100,7 +105,7 @@ for LH in ['LHA', 'LHB']:
                     'y':    df['real_y_mm'].values,
                     'time': df['time_s'].values}
 
-    plot_trajectory_and_error(lh2_data, camera_data, error, start_time, end_time)
+    # plot_trajectory_and_error(lh2_data, camera_data, error, start_time, end_time)
 
 errors = np.hstack(errors)
 # Print the RMSE, MAE and STD
@@ -109,4 +114,4 @@ print(f"Root Mean Square Error = {np.sqrt((errors**2).mean())} mm")
 print(f"Error std = {errors.std()}mm ")
 print(f"Number of data point = {errors.shape}")
 
-plot_error_histogram(errors)
+# plot_error_histogram(errors)

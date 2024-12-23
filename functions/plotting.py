@@ -181,3 +181,66 @@ def plot_error_histogram(errors):
     # Save and show figure
     plt.savefig('Result-B-1lh_2d-histogram.pdf')
     plt.show()
+
+
+def plot_projected_fitted_ellipses(pts, circles):
+    """
+    Plot the projected views from each of the lighthouse
+    """
+
+    fig = plt.figure(layout="constrained")
+    gs = GridSpec(6, 3, figure = fig)
+    lh_ax    = fig.add_subplot(gs[0:6, 0:6])
+    axs = (lh_ax,)
+
+    t = np.arange(pts.shape[0])
+
+    # 2D plots - LH2 perspective
+    lh_ax.scatter(pts[:,0], pts[:,1], c=t,cmap='inferno', alpha=0.5, lw=1, label="LH1")
+
+    for C in circles:
+        plot_conic(lh_ax, C)
+
+    # Plot the groundtruth of the top point to check if the conversion is working well.
+    # if extra_pts != None:
+    #     LHA, LHC = extra_pts
+    #     lh1_ax.scatter(LHA[0], LHA[1], color='xkcd:pink', alpha=1, lw=1, label="top point real")
+
+    # Add labels and grids
+    for ax in axs:
+        ax.grid()
+        ax.legend()
+    lh_ax.axis('equal')
+    lh_ax.set_xlabel('U [px]')
+    lh_ax.set_ylabel('V [px]')
+
+
+    plt.show()
+
+def plot_conic(ax, circle, color='blue', label=None):
+    """
+    Plots a conic section defined by Ax^2 + Bxy + Cy^2 + Dx + Ey + F = 0 on a given axis.
+    
+    Parameters:
+        ax (matplotlib.axes.Axes): The subplot axis to draw the conic section.
+        A, B, C, D, E, F (float): Coefficients of the conic equation.
+        color (str): Color of the conic plot. Default is 'blue'.
+        label (str): Label for the conic plot. Default is None.
+    """
+
+    A, B, C, D, E, F = circle
+
+    # Define the function for the conic equation
+    def conic_eq(x, y):
+        return A * x**2 + B * x * y + C * y**2 + D * x + E * y + F
+
+    # Set up a grid for plotting
+    x = np.linspace(-1, 1, 1000)  # Adjust the range if needed
+    y = np.linspace(-1, 1, 1000)
+    X, Y = np.meshgrid(x, y)
+
+    # Evaluate the conic equation on the grid
+    Z = conic_eq(X, Y)
+
+    # Plot the contour where the conic equation equals zero
+    ax.contour(X, Y, Z, levels=[0], colors=color, label=label)
