@@ -19,6 +19,7 @@ from matplotlib.gridspec import GridSpec
 from functions.data_processing import   import_data, \
                                         LH2_count_to_pixels, \
                                         get_circles, \
+                                        get_circles_sk, \
                                         intersect_ellipses, \
                                         compute_correcting_homography, \
                                         apply_corrective_homography, \
@@ -30,7 +31,7 @@ from functions.data_processing import   import_data, \
 from functions.plotting import plot_trajectory_and_error, plot_error_histogram, plot_projected_LH_views
 
 print()
-print("LH,c1,c2,mae,rms,std,dist,angle_1,angle_2,max_angle,ecc1,ecc2,ecc_dif")
+print("sk,LH,c1,c2,mae,rms,std,dist,angle_1,angle_2,max_angle,ecc1,ecc2,ecc_dif")
 
 ####################################################################################
 ###                               Options                                        ###
@@ -82,7 +83,7 @@ for n1,n2 in itertools.combinations(range(num_circles),2):
         ####################################################################################
 
         # Get the conic equations for all of the circles.
-        circles = get_circles(df, calib_data, LH)
+        circles = get_circles_sk(df, calib_data, LH)
 
         # Grab two circles to test
         C1 = circles[n1]
@@ -133,5 +134,5 @@ for n1,n2 in itertools.combinations(range(num_circles),2):
         ecc_diff = np.abs(ecc1 - ecc2)
 
         # print(f"({n1},{n2}): MAE: {errors.mean():0.2f}\tRMS: {np.sqrt((errors**2).mean()):0.2f}\tSTD: {errors.std():0.2f} - Dist: {distance:0.2f}")
-        print(f"{LH},{n1},{n2},{errors.mean():0.2f},{np.sqrt((errors**2).mean()):0.2f},{errors.std():0.2f},{distance:0.2f},{angle_1:0.3f},{angle_2:0.3f},{max_angle:0.3f},{ecc1:0.3f},{ecc2:0.3f},{ecc_diff:0.3f}")
+        print(f"total,{LH},{n1},{n2},{errors.mean():0.2f},{np.sqrt((errors**2).mean()):0.2f},{errors.std():0.2f},{distance:0.2f},{angle_1:0.3f},{angle_2:0.3f},{max_angle:0.3f},{ecc1:0.3f},{ecc2:0.3f},{ecc_diff:0.3f}")
 

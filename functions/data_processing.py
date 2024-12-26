@@ -6,6 +6,7 @@ from dateutil import parser
 import re
 from skspatial.objects import Plane
 import sympy as sp
+from skimage.measure import EllipseModel
 
 ####################################################################################
 ###                                 Private                                      ###
@@ -485,7 +486,33 @@ def fit_ellipse(points):
 
     residual = a * x**2 + b * x*y + c * y**2 + d * x + e * y + f
 
+    # Normalize the parameter to F=1
+    params = params / params[5]
+
     return params, residual  # Returns the coefficients [A, B, C, D, E, F]
+
+def fit_ellipse_sk(points):
+
+    # Fit the ellipse
+    ellipse = EllipseModel()
+    _ = ellipse.estimate(points)   
+
+    # Convert ellipse parameters to general equation parameters
+    xc, yc, a, b, theta = ellipse.params
+
+    A = (a * np.sin(theta))**2 + (b * np.cos(theta))**2
+    B = 2 * (b*b - a*a) * np.sin(theta) * np.cos(theta)
+    C = (a * np.cos(theta))**2 + (b * np.sin(theta))**2
+    D = -2 * A * xc - B * yc
+    E = - B * xc - 2 * C * yc
+    F = A*xc*xc + B*xc*yc + C*yc*yc - a*a*b*b
+
+    params = np.array([A, B, C, D, E, F])
+    
+    # normalize the parameters to F=1
+    params = params / params[5]
+
+    return params, ellipse.residuals(points)
 
 def distance_between_conics(C1, C2):
     # Matrix of the quadratic form
@@ -541,7 +568,47 @@ def get_circles(df:pd.DataFrame, calib_data:dict, LH: str):
         circles.append(circle)
 
         # Print the equation for debbuging purposes
-        # print(f"param: {circle}, residual: {abs(residual).mean()} ")
+        # print(f"param: {np.round(circle,4)}, residual: {abs(residual).mean()} ")
+    
+    return circles
+
+def get_circles_sk(df:pd.DataFrame, calib_data:dict, LH: str):
+    """
+    Extracts the data related to calibration circles, as indicated by the calibration data.
+    Fits them to a conic equation
+
+    Params:
+        df: dataset, with the following columns: ['timestamp', 'time_s', 'LHA_count_1', 'LHA_count_2', 'LHB_count_1',
+                                                    'LHB_count_2', 'real_x_mm', 'real_y_mm', 'real_z_mm', 'LHA_proj_x',
+                                                    'LHA_proj_y', 'LHB_proj_x', 'LHB_proj_y']
+
+        calib_data: calibration data with the start and end timestamp of every circle
+
+        LH: 'LHA' or 'LHB', depending of which LH we are working with,
+    """
+    bit = 5
+    circles = []
+    for id in list(calib_data['circles'].keys()):
+
+        # Compatibility for a previous version of the code
+        if id == 'quantity': continue
+
+        # Get start and end timestamp for the circle data
+        start = calib_data['circles'][id][0]
+        end   = calib_data['circles'][id][1]
+
+        # Extract the selected LH projected data
+        circle_data = df.loc[ (df['timestamp'] > start) & (df['timestamp'] < end)]
+        points = circle_data[[LH+'_proj_x',LH+'_proj_y']].values
+
+        # Try to fit the data to an ellipse conic
+        circle, residual = fit_ellipse_sk(points)  
+
+        # Add it to the list      
+        circles.append(circle)
+
+        # Print the equation for debbuging purposes
+        # print(f"param: {np.round(circle,4)}, residual: {abs(residual).mean()} ")
     
     return circles
 

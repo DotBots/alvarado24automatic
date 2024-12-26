@@ -183,7 +183,7 @@ def plot_error_histogram(errors):
     plt.show()
 
 
-def plot_projected_fitted_ellipses(pts, circles):
+def plot_projected_fitted_ellipses(pts, circles, circles_2=None):
     """
     Plot the projected views from each of the lighthouse
     """
@@ -199,7 +199,11 @@ def plot_projected_fitted_ellipses(pts, circles):
     lh_ax.scatter(pts[:,0], pts[:,1], c=t,cmap='inferno', alpha=0.5, lw=1, label="LH1")
 
     for C in circles:
-        plot_conic(lh_ax, C)
+        plot_conic(lh_ax, C, 'xkcd:blue')
+
+    if circles_2 is not None:
+        for C in circles_2:
+            plot_conic(lh_ax, C, 'xkcd:green')
 
     # Plot the groundtruth of the top point to check if the conversion is working well.
     # if extra_pts != None:

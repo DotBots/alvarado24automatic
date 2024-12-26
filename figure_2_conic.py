@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 
-# import matplotlib
-# matplotlib.use('TKAgg')
+import matplotlib
+matplotlib.use('TKAgg')
 
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
@@ -13,6 +13,7 @@ from matplotlib.gridspec import GridSpec
 from functions.data_processing import   import_data, \
                                         LH2_count_to_pixels, \
                                         get_circles, \
+                                        get_circles_sk, \
                                         intersect_ellipses, \
                                         compute_correcting_homography, \
                                         apply_corrective_homography, \
@@ -25,7 +26,7 @@ from functions.plotting import plot_trajectory_and_error, plot_error_histogram, 
 ###                               Options                                        ###
 ####################################################################################
 # Define which of the 6 experimetns you want to plot
-experiment_number = 2
+experiment_number = 1
 
 ####################################################################################
 ###                            Read Dataset                                      ###
@@ -66,10 +67,12 @@ for LH in ['LHA', 'LHB']:
 
     # Get the conic equations for all of the circles.
     circles = get_circles(df, calib_data, LH)
+    print()
+    circles_sk = get_circles_sk(df, calib_data, LH)
 
     # Grab two circles to test
-    C1 = circles[4]
-    C2 = circles[6] 
+    C1 = circles[1]
+    C2 = circles[-1] 
 
     sol = intersect_ellipses(C1, C2)
 
@@ -100,7 +103,7 @@ for LH in ['LHA', 'LHB']:
                     'y':    df['real_y_mm'].values,
                     'time': df['time_s'].values}
 
-    plot_trajectory_and_error(lh2_data, camera_data, error, start_time, end_time)
+    # plot_trajectory_and_error(lh2_data, camera_data, error, start_time, end_time)
 
 errors = np.hstack(errors)
 # Print the RMSE, MAE and STD
@@ -109,4 +112,4 @@ print(f"Root Mean Square Error = {np.sqrt((errors**2).mean())} mm")
 print(f"Error std = {errors.std()}mm ")
 print(f"Number of data point = {errors.shape}")
 
-plot_error_histogram(errors)
+# plot_error_histogram(errors)

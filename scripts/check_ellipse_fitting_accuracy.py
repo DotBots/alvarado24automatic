@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 
-# import matplotlib
-# matplotlib.use('TKAgg')
+import matplotlib
+matplotlib.use('TKAgg')
 
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
@@ -13,6 +13,7 @@ from matplotlib.gridspec import GridSpec
 from functions.data_processing import   import_data, \
                                         LH2_count_to_pixels, \
                                         get_circles, \
+                                        get_circles_sk, \
                                         intersect_ellipses, \
                                         compute_correcting_homography, \
                                         apply_corrective_homography, \
@@ -67,10 +68,12 @@ for LH in ['LHA', 'LHB']:
 
     # Get the conic equations for all of the circles.
     circles = get_circles(df, calib_data, LH)
+    print()
+    circles_sk = get_circles_sk(df, calib_data, LH)
 
     pts = df[[LH+'_proj_x', LH+'_proj_y']].values
 
-    plot_projected_fitted_ellipses(pts, circles)
+    plot_projected_fitted_ellipses(pts, circles, circles_sk)
 
     # Grab two circles to test
     C1 = circles[1]
