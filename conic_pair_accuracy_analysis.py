@@ -19,19 +19,19 @@ from matplotlib.gridspec import GridSpec
 from functions.data_processing import   import_data, \
                                         LH2_count_to_pixels, \
                                         get_circles, \
-                                        get_circles_sk, \
                                         intersect_ellipses, \
                                         compute_correcting_homography, \
                                         apply_corrective_homography, \
                                         correct_similarity_distrotion, \
                                         distance_between_conics, \
-                                        conic_eccentricity
+                                        conic_eccentricity, \
+                                        apply_conic_homography
 
 
 from functions.plotting import plot_trajectory_and_error, plot_error_histogram, plot_projected_LH_views
 
 print()
-print("sk,LH,c1,c2,mae,rms,std,dist,angle_1,angle_2,max_angle,ecc1,ecc2,ecc_dif")
+print("sk,LH,c1,c2,mae,rms,std,dist,angle_1,angle_2,max_angle,ecc1,ecc2,ecc_dif,ecc1_h,ecc2_h,ecc_h_ave")
 
 ####################################################################################
 ###                               Options                                        ###
@@ -83,7 +83,7 @@ for n1,n2 in itertools.combinations(range(num_circles),2):
         ####################################################################################
 
         # Get the conic equations for all of the circles.
-        circles = get_circles_sk(df, calib_data, LH)
+        circles = get_circles(df, calib_data, LH)
 
         # Grab two circles to test
         C1 = circles[n1]
@@ -133,6 +133,17 @@ for n1,n2 in itertools.combinations(range(num_circles),2):
         ecc2 = conic_eccentricity(C2)
         ecc_diff = np.abs(ecc1 - ecc2)
 
+        # Compute eccentricity a posteriory
+        # Apply the projective homography 
+        C1_h = apply_conic_homography(C1, H_projective)
+        C2_h = apply_conic_homography(C2, H_projective)
+        # Calculate their eccentricity
+        ecc1_h = conic_eccentricity(C1_h)
+        ecc2_h = conic_eccentricity(C2_h)
+        # Also get the average.
+        ecc_h_ave = np.mean([ecc1_h, ecc2_h])
+
+
         # print(f"({n1},{n2}): MAE: {errors.mean():0.2f}\tRMS: {np.sqrt((errors**2).mean()):0.2f}\tSTD: {errors.std():0.2f} - Dist: {distance:0.2f}")
-        print(f"total,{LH},{n1},{n2},{errors.mean():0.2f},{np.sqrt((errors**2).mean()):0.2f},{errors.std():0.2f},{distance:0.2f},{angle_1:0.3f},{angle_2:0.3f},{max_angle:0.3f},{ecc1:0.3f},{ecc2:0.3f},{ecc_diff:0.3f}")
+        print(f"total,{LH},{n1},{n2},{errors.mean():0.2f},{np.sqrt((errors**2).mean()):0.2f},{errors.std():0.2f},{distance:0.2f},{angle_1:0.3f},{angle_2:0.3f},{max_angle:0.3f},{ecc1:0.3f},{ecc2:0.3f},{ecc_diff:0.3f},{ecc1_h:0.3f},{ecc2_h:0.3f},{ecc_h_ave:0.3f}")
 

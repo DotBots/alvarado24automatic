@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import cv2
 from dateutil import parser
+import itertools
 import re
 from skspatial.objects import Plane
 import sympy as sp
@@ -925,3 +926,40 @@ def conic_eccentricity(circle):
     eccentricity = numerator / denominator
     
     return eccentricity
+
+def compute_best_correcting_homography(circles):
+    """
+    Grabs all the calibration systems. Tries all possible pairs
+    And returns the homography that results in the best possible homographic correction.
+    """
+
+    # Create starting values
+    best_eccentricity = 10.
+    best_homography = None
+
+    # Iterate over available circle pairs
+    num_circles = len(circles)
+    for n1,n2 in itertools.combinations(range(num_circles),2):
+
+        # Grab two circles to test
+        C1 = circles[n1]
+        C2 = circles[n2] 
+        # Intersect circles
+        sol = intersect_ellipses(C1, C2)
+        # Compute the correcting homography
+        linf, Cinf, H_affinity, H_projective = compute_correcting_homography(sol, [C1, C2])
+
+        # Calculate average eccentricity 
+        ecc = []
+        for C in circles:
+            C_h = apply_conic_homography(C, H_projective)
+            ecc_h = conic_eccentricity(C_h)
+            ecc.append(ecc_h)
+        ecc = np.array(ecc).mean()
+
+        # Check if this is the best result so far
+        if ecc < best_eccentricity:
+            best_homography = H_projective
+            best_eccentricity = ecc
+
+    return best_homography, best_eccentricity
