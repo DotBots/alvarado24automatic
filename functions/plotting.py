@@ -150,6 +150,11 @@ def plot_error_histogram(errors):
 
     """
 
+    # print the mean and standard deviation
+    print(f"Mean Absolute Error = {errors.mean()} mm")
+    print(f"Root Mean Square Error = {np.sqrt((errors**2).mean())} mm")
+    print(f"Error Standard Deviation = {errors.std()} mm")
+
     # Plot the results
     fig = plt.figure(layout="constrained", figsize=(5,4))
     gs = GridSpec(3, 3, figure = fig)
@@ -182,6 +187,37 @@ def plot_error_histogram(errors):
     plt.savefig('Result-B-1lh_2d-histogram.pdf')
     plt.show()
 
+def twoLH_plot_reconstructed_3D_scene(df):
+    """
+    Plot a 3D scene with the traingulated points previously calculated
+    ---
+    input:
+    point3D - array [3,N] - triangulated points of the positions of the LH2 receveier
+    t_star  - array [3,1] - Translation vector between the first and the second lighthouse basestation
+    R_star  - array [3,3] - Rotation matrix between the first and the second lighthouse basestation
+    point3D - array [3,N] - second set of pointstriangulated points of the positions of the LH2 receveier
+    """
+    ## Plot the two coordinate systems
+    #  x is blue, y is red, z is green
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.set_proj_type('ortho')
+    # First lighthouse:
+
+    lh_points = df[['LH_Rt_x','LH_Rt_y','LH_Rt_z']].values
+    mocap_points = df[['real_x_mm', 'real_y_mm', 'real_z_mm']].values
+    ax.scatter(mocap_points[:,0], mocap_points[:,1], mocap_points[:,2], alpha=0.1, color="xkcd:red", label="Mocap")
+    ax.scatter(lh_points[:,0],lh_points[:,1],lh_points[:,2], alpha=0.1, label="LH")
+
+   
+    ax.axis('equal')
+    ax.legend()
+    ax.set_title('2D solved scene - 3D triangulated Points')
+    ax.set_xlabel('X [mm]')
+    ax.set_ylabel('Y [mm]')
+    ax.set_zlabel('Z [mm]')   
+
+    plt.show()
 
 def plot_projected_fitted_ellipses(pts, circles, circles_2=None):
     """

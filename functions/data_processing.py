@@ -392,6 +392,245 @@ def get_start_end_index(data, t_start, t_stop):
     point = [data['x'][idx], data['y'][idx]]
     return point
 
+####################################################################################
+###                                 2LH 2D                                       ###
+####################################################################################
+
+#### Private
+
+def twoLH_solve_point_plane(n_star, zeta, pts):
+    
+    # Extend the points to homogeneous coordinates.
+    pts_hom = np.hstack((pts, np.ones((len(pts),1))))
+
+    # Get the scaling factor for every point in the LH image plane.
+    scales = (1/zeta) / (n_star @ pts_hom.T)
+    # scale the points
+    scales_matrix = np.vstack((scales,scales,scales))
+    final_points = scales_matrix*pts_hom.T
+    final_points = final_points.T
+
+    return final_points
+
+#### Public
+
+def twoLH_solve_2d_scene_get_Rtn(pts_a, pts_b):
+
+    # gg=cv2.findHomography(pts_a,pts_b, method = cv2.RANSAC, ransacReprojThreshold = 3)
+    gg=cv2.findHomography(pts_a, pts_b, cv2.FM_LMEDS)
+
+    homography_mat = gg[0]
+    U, S, V = np.linalg.svd(homography_mat)
+
+    V = V.T
+
+    s1 = S[0]/S[1]
+    s3 = S[2]/S[1]
+    zeta = s1-s3
+    a1 = np.sqrt(1-s3**2)
+    b1 = np.sqrt(s1**2-1)
+
+    def unitize(x_in,y_in):
+        magnitude = np.sqrt(x_in**2 + y_in**2)
+        x_out = x_in/magnitude
+        y_out = y_in/magnitude
+
+        return x_out, y_out  
+
+    a, b = unitize(a1,b1)
+    c, d = unitize(1+s1*s3,a1*b1)
+    e, f = unitize(-b/s1,-a/s3)
+
+    v1 = np.array(V[:,0])
+    v3 = np.array(V[:,2])
+    n1 = b*v1-a*v3
+    n2 = b*v1+a*v3
+
+    R1 = np.matmul(np.matmul(U,np.array([[c,0,d], [0,1,0], [-d,0,c]])),V.T)
+    R2 = np.matmul(np.matmul(U,np.array([[c,0,-d], [0,1,0], [d,0,c]])),V.T)
+    R1 = np.linalg.inv(R1)
+    R2 = np.linalg.inv(R2)
+
+    # print(R1)
+
+    t1 = (e*v1+f*v3).reshape((3,1))
+    t2 = (e*v1-f*v3).reshape((3,1))
+
+    # if (n1[2]<0):
+    #     t1 = -t1
+    #     n1 = -n1
+    # elif (n2[2]<0):
+    #     t2 = -t2
+    #     n2 = -n2
+
+    fil = {'R1' : R1,
+           'R2' : R2,
+           'n1' : n1,
+           'n2' : n2,
+           't1' : t1,
+           't2' : t2,
+           'zeta': zeta}
+
+    # Check which of the solutions is the correct one. 
+
+    solution_1 = (t1, R1, n1)   
+    solution_2 = (t2, R2, n2)   
+    
+
+    return solution_1, solution_2, zeta
+
+def twoLH_process_calibration(n_star, zeta, calib_data):
+    
+    # Create the nested dictionary structure needed
+    calib_data['corners_lh2_proj'] = {}
+    calib_data['corners_lh2_proj']['LHA'] = {}
+    calib_data['corners_lh2_proj']['LHB'] = {}
+
+    calib_data['corners_lh2_3D'] = {}
+
+
+    # Project calibration points 
+    for corner in ['tl','tr','bl','br']:
+        # Project the points
+        c1a = np.array([calib_data['corners_lh2_count'][corner]['lha_count_0']])
+        c2a = np.array([calib_data['corners_lh2_count'][corner]['lha_count_1']])
+        c1b = np.array([calib_data['corners_lh2_count'][corner]['lhb_count_0']])
+        c2b = np.array([calib_data['corners_lh2_count'][corner]['lhb_count_1']])
+        pts_A = LH2_count_to_pixels(c1a, c2a, 0)
+        pts_B = LH2_count_to_pixels(c1b, c2b, 1)
+
+        # Add it back to the calib dictionary
+        calib_data['corners_lh2_proj']['LHA'][corner] = pts_A[0]
+        calib_data['corners_lh2_proj']['LHB'][corner] = pts_B[0]
+
+        # Reconstruct the 3D points
+        point3D = twoLH_solve_point_plane(n_star, zeta, pts_A)
+
+        # Add the 3D points back to the  dictionary
+        calib_data['corners_lh2_3D'][corner] = point3D
+
+    return calib_data
+
+def twoLH_scale_LH2_to_real_size(calib_data, point3D):
+    # Grab the point at top-left and bottom-right and scale them to the corresponding mocap corners.
+    scale_LH_p1 = calib_data['corners_lh2_3D']['tl']
+    scale_LH_p2 = calib_data['corners_lh2_3D']['br']
+    scale_mocap_p1 = calib_data['corners_mm']['tl'][:2]
+    scale_mocap_p2 = calib_data['corners_mm']['br'][:2]
+    scale = np.linalg.norm(scale_mocap_p2 - scale_mocap_p1) / np.linalg.norm(scale_LH_p2 - scale_LH_p1)
+    # Scale all the 3D points
+    point3D *= scale
+    
+    # scale the calibration points
+    calib_data['corners_lh2_3D_scaled'] = {}
+    calib_data['corners_lh2_3D_scaled']['tl'] = calib_data['corners_lh2_3D']['tl'] * scale
+    calib_data['corners_lh2_3D_scaled']['tr'] = calib_data['corners_lh2_3D']['tr'] * scale
+    calib_data['corners_lh2_3D_scaled']['bl'] = calib_data['corners_lh2_3D']['bl'] * scale
+    calib_data['corners_lh2_3D_scaled']['br'] = calib_data['corners_lh2_3D']['br'] * scale
+
+    # Return scaled up scene
+    return scale, calib_data, point3D
+
+def twoLH_interpolate_cam_data(lh_data, exp_data):
+
+
+    camera_np = {'time': exp_data['time_s'].to_numpy(),
+                'x':    exp_data['x'].to_numpy(),
+                'y':    exp_data['y'].to_numpy(),
+                'z':    exp_data['z'].to_numpy(),}
+
+
+    lh2_np = {'time':   lh_data['time_s'].to_numpy(),
+                'x':    lh_data['LH_x'],
+                'y':    lh_data['LH_y'],}
+
+
+    # Offset the camera timestamp to get rid of the communication delay.
+    camera_np['time'] += 265000e-6 # seconds
+    
+
+    camera_np['x_interp_lh2'] = np.interp(lh2_np['time'], camera_np['time'],  camera_np['x'])
+    camera_np['y_interp_lh2'] = np.interp(lh2_np['time'], camera_np['time'],  camera_np['y'])
+    camera_np['z_interp_lh2'] = np.interp(lh2_np['time'], camera_np['time'],  camera_np['z'])
+
+
+    exp_data_interp = pd.DataFrame({
+                          'time_s' : lh2_np['time'],
+
+                          'x': camera_np['x_interp_lh2'],
+
+                          'y': camera_np['y_interp_lh2'],
+
+                          'z': camera_np['z_interp_lh2']}
+                          )
+
+    return exp_data_interp
+
+def twoLH_correct_perspective(df, calib_data):
+    """
+    Create a rotation and translation vector to move the reconstructed grid onto the origin for better comparison.
+    Using an SVD, according to: https://nghiaho.com/?page_id=671
+    """
+
+    # Get the calibration corners
+    tl = df.loc[ (df['timestamp'] > calib_data['timestamps_lh2']["tl"][0]) & (df['timestamp'] < calib_data['timestamps_lh2']["tl"][1])].mean(axis=0, numeric_only=True)
+    tr = df.loc[ (df['timestamp'] > calib_data['timestamps_lh2']["tr"][0]) & (df['timestamp'] < calib_data['timestamps_lh2']["tr"][1])].mean(axis=0, numeric_only=True)
+    bl = df.loc[ (df['timestamp'] > calib_data['timestamps_lh2']["bl"][0]) & (df['timestamp'] < calib_data['timestamps_lh2']["bl"][1])].mean(axis=0, numeric_only=True)
+    br = df.loc[ (df['timestamp'] > calib_data['timestamps_lh2']["br"][0]) & (df['timestamp'] < calib_data['timestamps_lh2']["br"][1])].mean(axis=0, numeric_only=True)
+    
+    
+    
+    # Make an array with the ground truth target, and set it as a homogeneous z=1 point.
+    B = np.array([      tl[['real_x_mm', 'real_y_mm', 'real_z_mm']],\
+                        tr[['real_x_mm', 'real_y_mm', 'real_z_mm']],\
+                        bl[['real_x_mm', 'real_y_mm', 'real_z_mm']],\
+                        br[['real_x_mm', 'real_y_mm', 'real_z_mm']]])
+
+    # Make an array with the LH reconstructed points
+    A = np.array([      tl[['LH_x', 'LH_y', 'LH_z']],\
+                        tr[['LH_x', 'LH_y', 'LH_z']],\
+                        bl[['LH_x', 'LH_y', 'LH_z']],\
+                        br[['LH_x', 'LH_y', 'LH_z']]])
+
+
+    # B = np.unique(df[['real_x_mm','real_y_mm','real_z_mm']].to_numpy(), axis=0)
+    # A = np.empty_like(B, dtype=float)
+    # for i in range(B.shape[0]):
+    #     A[i] = df.loc[(df['real_x_mm'] == B[i,0])  & (df['real_y_mm'] == B[i,1]) & (df['real_z_mm'] == B[i,2]), ['LH_x', 'LH_y', 'LH_z']].values.mean(axis=0)
+
+    # Get  all the reconstructed points
+    A2 = df[['LH_x', 'LH_y', 'LH_z']].to_numpy()
+    A2 = A2.T
+
+    B2 = df[['real_x_mm', 'real_y_mm', 'real_z_mm']].to_numpy()
+    B2 = B2.T
+
+    # Convert the point to column vectors,
+    # to match twhat the SVD algorithm expects
+    A = A.T
+    B = B.T
+
+    # c, R, t = umeyama(A,B)
+    c, R, t = umeyama(A2,B2)
+
+    correct_points = (c*R@A2 + t)
+    correct_points = correct_points.T
+
+    # Update dataframe
+    df['LH_Rt_x'] = correct_points[:,0]
+    df['LH_Rt_y'] = correct_points[:,1]
+    df['LH_Rt_z'] = correct_points[:,2]
+
+
+    # Add information to the calib data dictionary
+    correct_corners = (c*R@A + t).T
+    calib_data['corners_px_Rt'] = {}
+    calib_data['corners_px_Rt']['tl'] = correct_corners[0]
+    calib_data['corners_px_Rt']['tr'] = correct_corners[1]
+    calib_data['corners_px_Rt']['bl'] = correct_corners[2]
+    calib_data['corners_px_Rt']['br'] = correct_corners[3]
+
+    return df, R, t
 
 ####################################################################################
 ###                            Conic Algorithm                                   ###
@@ -859,7 +1098,6 @@ def correct_similarity_distrotion(df, calib_data):
 
     return df, R, t
 
-
 def umeyama(X, Y):
     """
     Estimates the Sim(3) transformation between `X` and `Y` point sets.
@@ -896,7 +1134,6 @@ def umeyama(X, Y):
     R = U @ S @ VH
     t = mu_y - c * R @ mu_x
     return c, R, t
-
 
 def conic_eccentricity(circle):
     """
