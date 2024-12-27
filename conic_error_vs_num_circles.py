@@ -35,7 +35,6 @@ from functions.plotting import plot_trajectory_and_error, plot_error_histogram, 
 ###                               Options                                        ###
 ####################################################################################
 # Define which of the 6 experimetns you want to plot
-experiment_number = 1
 
 ####################################################################################
 ###                            Read Dataset                                      ###
