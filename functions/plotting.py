@@ -10,7 +10,7 @@ matplotlib.rcParams['ps.fonttype'] = 42
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 
-def plot_trajectory_and_error(lh2_data, camera_data, error, start_time, end_time):
+def plot_trajectory_and_error(lh2_data, camera_data, error, start_time, end_time, decimate = False):
     """
     Plots a superposition of the ground truth trajectory and estimated LH2 trajectory.
     As well as a separate subplot with the error.
@@ -37,6 +37,7 @@ def plot_trajectory_and_error(lh2_data, camera_data, error, start_time, end_time
 
     """
 
+
     # Find the indexes of the start and end times for the plots
     t_i = camera_data['time'][0] + start_time # seconds
     t_o = t_i + end_time
@@ -49,6 +50,11 @@ def plot_trajectory_and_error(lh2_data, camera_data, error, start_time, end_time
     c_sto = np.abs(camera_data['time'] - t_o).argmin()
     l_sto = np.abs(lh2_data['time'] - t_o).argmin()
 
+    # if there are too many points to plot, decimate the points so you only show max 1000
+    if decimate:
+        dec = int((l_sto - l_sta) / 500 )
+    else:
+        dec=1
 
     # Plot the results
     fig = plt.figure(layout="constrained", figsize=(5,4))
@@ -60,17 +66,17 @@ def plot_trajectory_and_error(lh2_data, camera_data, error, start_time, end_time
 
 
     # X vs. Y plots
-    xy_ax.plot(lh2_data['x'][l_sta:l_sto], lh2_data['y'][l_sta:l_sto], '--',color='b', lw=1, label="lighthouse")
-    xy_ax.plot(camera_data['x'][c_sta:c_sto], camera_data['y'][c_sta:c_sto], '-',color='k', lw=1, label="ground truth")
-    xy_ax.scatter(lh2_data['x'][l_sta:l_sto], lh2_data['y'][l_sta:l_sto],color='b', alpha=0.3)
-    xy_ax.scatter(camera_data['x'][c_sta:c_sto], camera_data['y'][c_sta:c_sto], alpha=0.3,color='k', lw=1)
+    xy_ax.plot(lh2_data['x'][l_sta:l_sto:dec], lh2_data['y'][l_sta:l_sto:dec], '--',color='b', lw=1, label="lighthouse")
+    xy_ax.plot(camera_data['x'][c_sta:c_sto:dec], camera_data['y'][c_sta:c_sto:dec], '-',color='k', lw=1, label="ground truth")
+    xy_ax.scatter(lh2_data['x'][l_sta:l_sto:dec], lh2_data['y'][l_sta:l_sto:dec],color='b', alpha=0.3)
+    xy_ax.scatter(camera_data['x'][c_sta:c_sto:dec], camera_data['y'][c_sta:c_sto:dec], alpha=0.3,color='k', lw=1)
     # xy_ax.scatter([80,120,120,80], [80,80,120,120], edgecolor='r', facecolor='red', lw=1, label="markers")
     # Plot one synchronized point to check for a delay.
     idx = error.argmax()
     xy_ax.scatter(camera_data['x'][idx], camera_data['y'][idx], edgecolor='k', facecolor='xkcd:red', lw=1)
     xy_ax.scatter(lh2_data['x'][idx], lh2_data['y'][idx], edgecolor='k', facecolor='xkcd:pink', lw=1)
 
-    error_ax.plot(lh2_data['time'][l_sta:l_sto] - t_i, error[l_sta:l_sto], '-',color='b', lw=1, label="LH error")
+    error_ax.plot(lh2_data['time'][l_sta:l_sto:dec] - t_i, error[l_sta:l_sto:dec], '-',color='b', lw=1, label="LH error")
 
     # Add labels and grids
     for ax in axs:
@@ -284,3 +290,46 @@ def plot_conic(ax, circle, color='blue', label=None):
 
     # Plot the contour where the conic equation equals zero
     ax.contour(X, Y, Z, levels=[0], colors=color, label=label)
+
+
+
+def plot_acc_vs_npoints(df_plot):
+    
+    # Find out how many unique num_circles are available in this experiment
+    unique_num_circles = np.unique(df_plot['num_circles'].to_numpy().astype(int), axis=0)
+
+    # Go through all the available N_point experiments
+    mae_std = np.empty((1+unique_num_circles.max()-2,3))
+    for i in unique_num_circles:
+        # Get the mean of the MAE, and the STD of the MAE
+        mae = df_plot.loc[(df_plot['num_circles'] == i), 'mae_experiment'].values.mean(axis=0)    
+        std = df_plot.loc[(df_plot['num_circles'] == i), 'mae_experiment'].values.std(axis=0)
+        # Add it to our empty array for plotting later
+        mae_std[int(i)-2] = np.array([i, mae, std])    
+
+    # prepare the plot
+    fig = plt.figure(layout="constrained", figsize=(5,4))
+    gs = GridSpec(3, 3, figure = fig)
+    error_ax    = fig.add_subplot(gs[0:3, 0:3])
+    axs = (error_ax,)
+
+    # Plot Y = MAE, X = num_circles
+    error_ax.plot(mae_std[:,0], mae_std[:,1], 'xkcd:blue')
+    error_ax.scatter(mae_std[:,0], mae_std[:,1], color='xkcd:blue')
+    # Add and area with 2 std deviation
+    error_ax.fill_between(mae_std[:,0], np.clip(mae_std[:,1] - 1*mae_std[:,2], 0.0, 1e10), mae_std[:,1] + 1*mae_std[:,2], alpha=0.2, edgecolor='xkcd:indigo', facecolor='lightblue', linestyle='dashed', antialiased=True)
+
+    for ax in axs:
+        ax.grid()
+        # ax.legend()
+    
+    error_ax.set_xlabel('Number of Calibration Circles')
+    error_ax.set_ylabel('Mean Average Error [mm]')
+
+    error_ax.set_xlim((2, 10))
+    error_ax.set_ylim((0, 25))
+
+    plt.savefig('Result-G-2lh_3d-pufpr.pdf')
+
+    print(mae_std)
+    plt.show()
