@@ -24,7 +24,7 @@ from functions.plotting import plot_trajectory_and_error, plot_error_histogram, 
 ####################################################################################
 ###                               Options                                        ###
 ####################################################################################
-# Define which of the 6 experimetns you want to plot
+
 errors=[]
 for experiment_number in [1,2]:
     ####################################################################################
@@ -89,13 +89,10 @@ for experiment_number in [1,2]:
                         'y':    df['real_y_mm'].values,
                         'time': df['time_s'].values}
 
-        plot_trajectory_and_error(lh2_data, camera_data, error, start_time, end_time)
+        # Uncomment to plot examples of the reconstructed trajectories
+        # plot_trajectory_and_error(lh2_data, camera_data, error, start_time, end_time)
 
 errors = np.hstack(errors)
-# Print the RMSE, MAE and STD
-print(f"Error Mean = {errors.mean()}mm")
-print(f"Root Mean Square Error = {np.sqrt((errors**2).mean())} mm")
-print(f"Error std = {errors.std()}mm ")
-print(f"Number of data point = {errors.shape}")
-
+# Print the RMSE, MAE and STD and,
+# Plot the histogram error.
 plot_error_histogram(errors)
