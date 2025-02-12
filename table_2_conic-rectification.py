@@ -1,25 +1,19 @@
-# import the necessary packages
-import json
-import numpy as np
-import pandas as pd
-from datetime import datetime
+# Results for Table 2, Conic Rectification algorithm accuracy.
+# Results get printed to the terminal
+# For 5 conic version, uncomment line 24
+# For 10 conic version, uncomment line 25
 
+# import the necessary packages
+import numpy as np
 import matplotlib
 matplotlib.use('TKAgg')
-
-import matplotlib.pyplot as plt
-from matplotlib.gridspec import GridSpec
 
 from functions.data_processing import   import_data, \
                                         LH2_count_to_pixels, \
                                         get_circles, \
-                                        get_circles_sk, \
-                                        intersect_ellipses, \
-                                        compute_correcting_homography, \
                                         apply_corrective_homography, \
                                         correct_similarity_distrotion, \
                                         compute_best_correcting_homography
-
 
 from functions.plotting import plot_trajectory_and_error, plot_error_histogram, plot_projected_LH_views
 
@@ -29,6 +23,7 @@ from functions.plotting import plot_trajectory_and_error, plot_error_histogram, 
 # Which crcles to use for the calibration
 circle_indices = list(range(0,10,2))  # 5 equally interspersed circles throughout the dataset
 # circle_indices = list(range(0,10))  # all 10 circles
+
 # Which Lighthouse perspectives to use for computing the accuracy
 LH_indices = ["LHA", "LHB"]
 # Which of the two available experiments to use for computing the accuracy.
@@ -95,6 +90,7 @@ for experiment_number in experiment_indices:
             df[['real_x_mm', 'real_y_mm']].values, 
             axis=1)
         
+        # Add the errors of this experiments to the general error list
         errors.append(error[start_idx:end_idx])
         ####################################################################################
         ###                                 Plot Results                                 ###
@@ -113,9 +109,7 @@ for experiment_number in experiment_indices:
 
 errors = np.hstack(errors)
 # Print the RMSE, MAE and STD
-print(f"Error Mean = {errors.mean()}mm")
+print(f"Mean Absolute Error = {errors.mean()} mm")
 print(f"Root Mean Square Error = {np.sqrt((errors**2).mean())} mm")
-print(f"Error std = {errors.std()}mm ")
+print(f"Error Standard Deviation = {errors.std()} mm")
 print(f"Number of data point = {errors.shape}")
-
-plot_error_histogram(errors)

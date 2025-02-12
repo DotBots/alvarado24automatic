@@ -95,7 +95,7 @@ def plot_trajectory_and_error(lh2_data, camera_data, error, start_time, end_time
     error_ax.set_xlim([0, lh2_data['time'][l_sto] - lh2_data['time'][l_sta]])
 
 
-    plt.savefig('Result-A-1lh_2d-example.pdf')
+    plt.savefig('trajectory-example.pdf')
 
     plt.show()
 
@@ -160,6 +160,7 @@ def plot_error_histogram(errors):
     print(f"Mean Absolute Error = {errors.mean()} mm")
     print(f"Root Mean Square Error = {np.sqrt((errors**2).mean())} mm")
     print(f"Error Standard Deviation = {errors.std()} mm")
+    print(f"Number of data point = {errors.shape}")
 
     # Plot the results
     fig = plt.figure(layout="constrained", figsize=(5,4))
@@ -190,7 +191,7 @@ def plot_error_histogram(errors):
     hist_ax.set_ylabel(f'Measurements (n = {errors.shape[0]})')
 
     # Save and show figure
-    plt.savefig('Result-B-1lh_2d-histogram.pdf')
+    plt.savefig('histogram.pdf')
     plt.show()
 
 def twoLH_plot_reconstructed_3D_scene(df):
@@ -329,7 +330,7 @@ def plot_acc_vs_npoints(df_plot):
     error_ax.set_xlim((2, 10))
     error_ax.set_ylim((0, 25))
 
-    plt.savefig('Result-G-2lh_3d-pufpr.pdf')
+    # plt.savefig('Result-G-2lh_3d-pufpr.pdf')
 
     print(mae_std)
     plt.show()

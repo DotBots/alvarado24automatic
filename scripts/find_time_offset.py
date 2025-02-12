@@ -1,24 +1,16 @@
+# Synchronize the timestamp between the Lighthouse and Mocap Dataset
+# This file needs to be moved into the root of the reposotory before executing
+
 # import the necessary packages
-import json
 import numpy as np
 import pandas as pd
-from datetime import datetime
 
 import matplotlib
 matplotlib.use('TKAgg')
 
-import matplotlib.pyplot as plt
-from matplotlib.gridspec import GridSpec
-
 from functions.data_processing import   import_data, \
                                         LH2_count_to_pixels, \
-                                        read_calibration_file, \
-                                        camera_to_world_homography, \
-                                        reorganize_data, \
-                                        interpolate_camera_to_lh2, \
-                                        find_closest_point
-
-from functions.plotting import plot_trajectory_and_error, plot_error_histogram, plot_projected_LH_views
+                                        camera_to_world_homography
 
 ####################################################################################
 ###                               Options                                        ###

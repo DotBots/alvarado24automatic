@@ -1,41 +1,26 @@
-# test every circle pair combination for computing the dual conic
-# to find the best homography.
-#
-
+# Figure 7, reconstruction accuracy vs. post rectification eccentricity
+#  
+# test every circle pair combination for computing the conic rectification
+# And save how good the reconstruction is.
 
 # import the necessary packages
-import json
 import numpy as np
 import pandas as pd
 import itertools
-from datetime import datetime
-
-# import matplotlib
-# matplotlib.use('TKAgg')
-
-import matplotlib.pyplot as plt
-from matplotlib.gridspec import GridSpec
 
 from functions.data_processing import   import_data, \
                                         LH2_count_to_pixels, \
                                         get_circles, \
-                                        intersect_ellipses, \
-                                        compute_correcting_homography, \
                                         apply_corrective_homography, \
                                         correct_similarity_distrotion, \
-                                        distance_between_conics, \
                                         conic_eccentricity, \
-                                        apply_conic_homography, \
                                         get_circles_mocap, \
                                         compute_best_correcting_homography
-
-
-from functions.plotting import plot_trajectory_and_error, plot_error_histogram, plot_projected_LH_views
 
 ####################################################################################
 ###                               Options                                        ###
 ####################################################################################
-# Define which of the 6 experimetns you want to plot
+
 
 ####################################################################################
 ###                            Read Dataset                                      ###
@@ -56,12 +41,11 @@ for experiment_number in [1,2]:
     start_time = df.loc[start_idx]['time_s'] - df.iloc[0]['time_s']
     end_time   = df.loc[end_idx]['time_s']   - df.iloc[0]['time_s']
 
-    # Compute all possible combination of circles
+    # Compute all possible combination of two numbers
     num_circles=10
     circle_combination = []
     for n in range(2,3):
         circle_combination += list(itertools.combinations(range(num_circles),n))
-
 
     ####################################################################################
     ###                            Process Data                                      ###
@@ -84,8 +68,6 @@ for experiment_number in [1,2]:
         # Get the conic equations for all of the circles.
         all_circles = get_circles(df, calib_data, LH)
         all_circles_mocap = get_circles_mocap(df, calib_data)
-        # all_circles = get_circles(df, calib_data, LH, correct_time=True)
-        # all_circles_mocap = get_circles_mocap(df, calib_data, correct_time=True)
 
         # Go over all possible combination of 2 to 10 circles to calculate the error per number of circle
         for circle_indices in circle_combination:
@@ -110,29 +92,29 @@ for experiment_number in [1,2]:
             trajectory_error = all_error[start_idx:end_idx]
 
             ## Compute all the values you need to save.
-            #  num_circles , LH , mae_all , rms_all , std_all , mae_experiment , rms_experiment , std_experiment , eccentricity 
             out_df.loc[len(out_df)] = [len(circles),
-                                        experiment_number,
-                                        LH,
-                                        all_error.mean(),
-                                        np.sqrt((all_error**2).mean()),
-                                        all_error.std(),
-                                        trajectory_error.mean(),
-                                        np.sqrt((trajectory_error**2).mean()),
-                                        trajectory_error.std(),
-                                        eccentricity,
-                                        circle_indices[0],
-                                        conic_eccentricity(circles_mocap[0]),
-                                        circle_indices[1],
-                                        conic_eccentricity(circles_mocap[1]),
-                                        max(conic_eccentricity(circles_mocap[0]),conic_eccentricity(circles_mocap[1])),
+                                        experiment_number,                                                              # Experiment 1 or 2
+                                        LH,                                                                             # Data from Lighthouse view A or B
+                                        all_error.mean(),                                                               # MAE of the entire dataset (calibration circles included)
+                                        np.sqrt((all_error**2).mean()),                                                 # RMS of the entire dataset (calibration circles included)
+                                        all_error.std(),                                                                # Standad deviation of the entire dataset (calibration circles included)
+                                        trajectory_error.mean(),                                                        # MAE of the dotbot trajectory ( excluding the calibration circles)
+                                        np.sqrt((trajectory_error**2).mean()),                                          # RMS of the dotbot trajectory ( excluding the calibration circles)
+                                        trajectory_error.std(),                                                         # Standad deviation of the dotbot trajectory ( excluding the calibration circles)
+                                        eccentricity,                                                                   # Post correction Eccentricity
+                                        circle_indices[0],                                                              # Index of the first circle used in the rectification
+                                        conic_eccentricity(circles_mocap[0]),                                           # First circle, real eccentricity
+                                        circle_indices[1],                                                              # Index of the second circle used in the rectification
+                                        conic_eccentricity(circles_mocap[1]),                                           # Second circle, real eccentricity
+                                        max(conic_eccentricity(circles_mocap[0]),conic_eccentricity(circles_mocap[1])), # Worst eccentricity of the two circles used in rectification
                                         ]
-            print(out_df.tail(1))
             
-            out_df.to_csv("real_vs_estimated_eccentricity.csv",index=True)
-            # out_df.to_csv("real_vs_estimated_eccentricity_one_circle.csv",index=True)
+            # Print and save the processed data line by line
+            print(out_df.tail(1))
+            out_df.to_csv("figure_7_dataset.csv",index=True)
         
 ####################################################################################
 ###                                 Plot Results                                 ###
 ####################################################################################
 
+# For plotting please use the figure_7_plot.py script

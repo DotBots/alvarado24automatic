@@ -1,18 +1,14 @@
-# test every circle pair combination for computing the dual conic
-# to find the best homography.
-#
-
+# Results for Table 1, 
+# How good is the DotBot at drawing circles with different wheel parameters.
+# Results get printed to the terminal
 
 # import the necessary packages
-import json
 import numpy as np
 import pandas as pd
-import itertools
 
 ####################################################################################
 ###                               Options                                        ###
 ####################################################################################
-# Define which of the 6 experimetns you want to plot
 
 
 def fit_ellipse(points):
@@ -71,14 +67,17 @@ def conic_eccentricity(circle):
 ###                            Read Dataset                                      ###
 ####################################################################################
 
-
 # Create the dataframe that will store the results
-concrete_mocap_file = f'concrete_floor_mocap.csv'
-plastic_mocap_file = f'plastic_sheet_mocap.csv'
+concrete_mocap_file = f'dataset/circularity_test/concrete_floor_mocap.csv'
+plastic_mocap_file = f'dataset/circularity_test/plastic_sheet_mocap.csv'
 
 # Read files
 concrete_data = pd.read_csv(concrete_mocap_file, parse_dates=['timestamp'])
 plastic_data  = pd.read_csv(plastic_mocap_file, parse_dates=['timestamp'])
+
+####################################################################################
+###                            Process Data                                      ###
+####################################################################################
 
 # Decimate data
 # n1 = len(concrete_data)
@@ -104,23 +103,18 @@ concrete_40d_ecc = conic_eccentricity(concrete_40d_circle)
 plastic_rubber_ecc = conic_eccentricity(plastic_rubber_circle)
 plastic_40d_ecc = conic_eccentricity(plastic_40d_circle)
 
-
-print("residuals: ")
-print(f"cr: {abs(residual_1).mean()}")
-print(f"c4: {abs(residual_2).mean()}")
-print(f"pr: {abs(residual_3).mean()}")
-print(f"p4: {abs(residual_4).mean()}")
-
-print("\neccentricity: ")
-print(f"cr: {concrete_rubber_ecc}")
-print(f"c4: {concrete_40d_ecc}")
-print(f"pr: {plastic_rubber_ecc}")
-print(f"p4: {plastic_40d_ecc}")
-
-
-
 ####################################################################################
-###                            Read Dataset                                      ###
+###                            Print Result                                      ###
 ####################################################################################
 
+print("Residuals: ")
+print(f"concrete - rubber: {abs(residual_1).mean()}")
+print(f"concrete - 40D:    {abs(residual_2).mean()}")
+print(f"plastic  - rubber: {abs(residual_3).mean()}")
+print(f"plastic  - 40D:    {abs(residual_4).mean()}")
 
+print("\nEccentricity: ")
+print(f"concrete - rubber: {concrete_rubber_ecc}")
+print(f"concrete - 40D:    {concrete_40d_ecc}")
+print(f"plastic  - rubber: {plastic_rubber_ecc}")
+print(f"plastic  - 40D:    {plastic_40d_ecc}")

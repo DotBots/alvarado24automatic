@@ -1,5 +1,7 @@
-# Results for Table 2, One-LH 2D algorithm accuracy.
-# Results get printed to the terminal
+# Figure 6, Conic Rectification algorithm accuracy histogram.
+# Results are plotted
+# For 5 conic version, uncomment line 24
+# For 10 conic version, uncomment line 25
 
 # import the necessary packages
 import numpy as np
@@ -8,17 +10,31 @@ matplotlib.use('TKAgg')
 
 from functions.data_processing import   import_data, \
                                         LH2_count_to_pixels, \
-                                        camera_to_world_homography, \
-                                        correct_similarity_distrotion
+                                        get_circles, \
+                                        apply_corrective_homography, \
+                                        correct_similarity_distrotion, \
+                                        compute_best_correcting_homography
 
 from functions.plotting import plot_trajectory_and_error, plot_error_histogram, plot_projected_LH_views
 
 ####################################################################################
-###                               Options                                        ###
+###                                Option                                        ###
+####################################################################################
+# Which crcles to use for the calibration
+circle_indices = list(range(0,10,2))  # 5 equally interspersed circles throughout the dataset
+# circle_indices = list(range(0,10))  # all 10 circles
+
+# Which Lighthouse perspectives to use for computing the accuracy
+LH_indices = ["LHA", "LHB"]
+# Which of the two available experiments to use for computing the accuracy.
+experiment_indices = [1,2]
+
+####################################################################################
+###                                Main                                          ###
 ####################################################################################
 
 errors=[]
-for experiment_number in [1,2]:
+for experiment_number in experiment_indices:
     ####################################################################################
     ###                            Read Dataset                                      ###
     ####################################################################################
@@ -31,10 +47,13 @@ for experiment_number in [1,2]:
     # Import data
     df, calib_data, (start_idx, end_idx) = import_data(LH_data_file, mocap_data_file, calib_file)
 
+    start_time = df.loc[start_idx]['time_s'] - df.iloc[0]['time_s']
+    end_time   = df.loc[end_idx]['time_s']   - df.iloc[0]['time_s']
+
     ####################################################################################
     ###                            Process Data                                      ###
     ####################################################################################
-    for LH in ['LHA', 'LHB']:
+    for LH in LH_indices:
         # Project sweep angles on to the z=1 image plane
         pts_lighthouse_A = LH2_count_to_pixels(df['LHA_count_1'].values, df['LHA_count_2'].values, 0)
         pts_lighthouse_B = LH2_count_to_pixels(df['LHB_count_1'].values, df['LHB_count_2'].values, 1)
@@ -49,12 +68,18 @@ for experiment_number in [1,2]:
         df['LHB_proj_y'] = pts_lighthouse_B[:,1]
 
         ####################################################################################
-        ###                             1LH 2D algorithm                                 ###
+        ###                             Conic algorithm                                 ###
         ####################################################################################
 
-        # Convert the LH2 pixel data to the world coordinate frame of reference.
-        pts_dst = np.array([[0,400],[400,400],[400,0],[0,0]])  # calibration 40x40 cm square
-        df = camera_to_world_homography(df, calib_data, pts_dst)
+        # Get the fitted conic equations for all of the circles.
+        all_circles = get_circles(df, calib_data, LH)
+
+        # Select some of the circles and compute the best homography
+        circles = [all_circles[i] for i in circle_indices]
+        H_projective, eccentricity = compute_best_correcting_homography(circles)
+
+        # Undistort the data with the computed homography
+        df = apply_corrective_homography(df, H_projective)
 
         # And make the code that matches both frames of reference, for comparison
         df,_,_ = correct_similarity_distrotion(df, calib_data)
@@ -67,7 +92,6 @@ for experiment_number in [1,2]:
         
         # Add the errors of this experiments to the general error list
         errors.append(error[start_idx:end_idx])
-
         ####################################################################################
         ###                                 Plot Results                                 ###
         ####################################################################################
@@ -80,12 +104,9 @@ for experiment_number in [1,2]:
                         'y':    df['real_y_mm'].values,
                         'time': df['time_s'].values}
 
-        # Uncomment to plot examples of the reconstructed trajectories
-        # start_time = df.loc[start_idx]['time_s'] - df.iloc[0]['time_s']
-        # end_time   = df.loc[end_idx]['time_s']   - df.iloc[0]['time_s']
-        # plot_trajectory_and_error(lh2_data, camera_data, error, start_time, end_time)
+        # Plot an example trajectory
+        # plot_trajectory_and_error(lh2_data, camera_data, error, start_time, end_time-50, decimate=True) # -50:  magic number to make this plot fill the entire available space. Otherwise it looks ugly
 
 errors = np.hstack(errors)
-# Print the RMSE, MAE and STD and,
-# Plot the histogram error.
+# Print the RMSE, MAE and STD
 plot_error_histogram(errors)
