@@ -1,3 +1,11 @@
+# This is a simplified example of the algorithm
+# It simulates 1 Lighthouse basestation looking down at an angle at two circles.
+#
+# The examples is in the main function, lines 542:595
+# Anything above are function definitions.
+# Anything below is plotting code
+# 
+
 import numpy as np
 import matplotlib
 matplotlib.use('TKAgg')
