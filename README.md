@@ -5,7 +5,9 @@ _Automatic Lighthouse Calibration Using Conics for Indoor Robot Localization_. S
 
 ## Getting Started
 
-TODO: Add requirements
+To install the required modules, run the following command from the root folder.
+
+`$ pip install -r requirements.txt`
 
 ## Using the Code
 
